@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import unittest
 
-from harness_kit.queue import claim_task
+from harness_kit.queue import claim_task, move_task
 from harness_kit.worktree import choose_worktree_path, close_worktree, open_worktree
 
 
@@ -49,6 +49,32 @@ Implement the queue contract.
 
 
 class WorktreePathTest(unittest.TestCase):
+    def _write_registry_record(
+        self,
+        repo: Path,
+        task_id: str,
+        path: Path,
+        status: str = "attached",
+        cleanup_policy: str = "preserve",
+    ) -> Path:
+        record = repo / ".harness" / "runtime" / "worktree-registry" / f"{task_id}.md"
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(
+            (
+                "---\n"
+                f"task_id: {task_id}\n"
+                f"worktree_name: {task_id}\n"
+                f"path: {path}\n"
+                f"branch: {task_id}\n"
+                f"status: {status}\n"
+                "baseline_verified: true\n"
+                f"cleanup_policy: {cleanup_policy}\n"
+                "---\n"
+            ),
+            encoding="utf-8",
+        )
+        return record
+
     def _init_git_repo(self, repo: Path) -> None:
         subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
         subprocess.run(
@@ -272,3 +298,51 @@ class WorktreePathTest(unittest.TestCase):
 
             self.assertTrue(claimed_task.is_file())
             self.assertEqual(claimed_task.parent.name, "in_progress")
+
+    def test_close_worktree_rejects_registry_paths_outside_project_worktrees(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            victim = root.parent / f"{root.name}-external-worktree"
+            victim.mkdir()
+            record = self._write_registry_record(root, "task-1", victim, cleanup_policy="delete")
+            before = record.read_text(encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                close_worktree(
+                    repo_root=root,
+                    task_id="task-1",
+                    mode="delete",
+                    worker_status="DONE",
+                )
+
+            self.assertTrue(victim.is_dir())
+            self.assertEqual(record.read_text(encoding="utf-8"), before)
+
+    def test_close_worktree_does_not_side_effect_on_invalid_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = root / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
+            task.parent.mkdir(parents=True)
+            task.write_text(TASK_TEXT, encoding="utf-8")
+            claimed_task, _ = claim_task(task_path=task, repo_root=root)
+            record = open_worktree(
+                repo_root=root,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+            review_task = move_task(claimed_task, "review")
+            before = record.read_text(encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                close_worktree(
+                    repo_root=root,
+                    task_id="task-1",
+                    mode="delete",
+                    worker_status="DONE",
+                )
+
+            self.assertTrue((root / ".worktrees" / "task-1").is_dir())
+            self.assertTrue(review_task.is_file())
+            self.assertEqual(review_task.parent.name, "review")
+            self.assertEqual(record.read_text(encoding="utf-8"), before)

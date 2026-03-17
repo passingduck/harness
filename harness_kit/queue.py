@@ -183,13 +183,15 @@ def _render_frontmatter(frontmatter: dict[str, Any], field_order: list[str] | tu
 
 def _parse_body_sections(body_text: str) -> dict[str, str]:
     sections: dict[str, str] = {}
+    section_headings = {f"## {name}": name for name in BODY_SECTION_FIELDS}
     current_name: str | None = None
     current_lines: list[str] = []
     for line in body_text.splitlines():
-        if line.startswith("## "):
+        section_name = section_headings.get(line.strip())
+        if section_name is not None:
             if current_name is not None:
                 sections[current_name] = "\n".join(current_lines).strip()
-            current_name = line[3:].strip()
+            current_name = section_name
             current_lines = []
             continue
         if current_name is not None:

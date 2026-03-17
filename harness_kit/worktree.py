@@ -9,7 +9,9 @@ from harness_kit.queue import (
     _parse_frontmatter,
     _render_frontmatter,
     _split_frontmatter_block,
+    VALID_TRANSITIONS,
     find_task_path,
+    load_task,
     move_task,
 )
 
@@ -116,6 +118,29 @@ def _write_registry_record(record_path: Path, record: dict[str, Any]) -> None:
     record_path.write_text(f"{frontmatter_text}\n", encoding="utf-8")
 
 
+def _resolve_registry_worktree_path(repo_root: Path, task_id: str, raw_path: str) -> Path:
+    worktrees_root = (repo_root / ".worktrees").resolve(strict=False)
+    expected_path = choose_worktree_path(repo_root, task_id).resolve(strict=False)
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = repo_root / candidate
+    resolved = candidate.resolve(strict=False)
+    if resolved != expected_path or not resolved.is_relative_to(worktrees_root):
+        raise ValueError("Registry worktree path must match the task worktree location.")
+    return resolved
+
+
+def _validate_close_transition(repo_root: Path, task_id: str, worker_status: str) -> Path | None:
+    task_path = find_task_path(repo_root, task_id)
+    if task_path is None:
+        return None
+    task = load_task(task_path)
+    target_state = WORKER_STATUS_TO_QUEUE_STATE[worker_status]
+    if target_state not in VALID_TRANSITIONS[task.state]:
+        raise ValueError(f"Invalid queue transition: {task.state} -> {target_state}")
+    return task_path
+
+
 def open_worktree(
     repo_root: Path,
     task_id: str,
@@ -161,7 +186,8 @@ def close_worktree(
     if not record_path.is_file():
         raise FileNotFoundError(f"Missing worktree registry record: {record_path}")
     record = _read_registry_record(record_path)
-    worktree_path = Path(str(record["path"]))
+    worktree_path = _resolve_registry_worktree_path(repo_root, task_id, str(record["path"]))
+    task_path = _validate_close_transition(repo_root, task_id, worker_status)
     if mode == "delete":
         _remove_worktree(repo_root, worktree_path)
         record["status"] = "deleted"
@@ -170,7 +196,6 @@ def close_worktree(
     record["cleanup_policy"] = mode
     _write_registry_record(record_path, record)
 
-    task_path = find_task_path(repo_root, task_id)
     moved_task: Path | None = None
     if task_path is not None:
         moved_task = move_task(task_path, WORKER_STATUS_TO_QUEUE_STATE[worker_status])

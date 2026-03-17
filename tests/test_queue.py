@@ -94,3 +94,21 @@ class QueueStateAuthorityTest(unittest.TestCase):
             ]:
                 self.assertIn(token, context_text)
 
+    def test_claim_task_preserves_markdown_subheadings_inside_task_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = root / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
+            task.parent.mkdir(parents=True)
+            task.write_text(
+                TASK_TEXT.replace(
+                    "Implement the queue contract.",
+                    "Implement the queue contract.\n\n## Implementation Notes\nKeep nested guidance.",
+                ),
+                encoding="utf-8",
+            )
+
+            _, context_pack = claim_task(task_path=task, repo_root=root)
+
+            context_text = context_pack.read_text(encoding="utf-8")
+            self.assertIn("## Implementation Notes", context_text)
+            self.assertIn("Keep nested guidance.", context_text)
