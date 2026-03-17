@@ -32,9 +32,15 @@ def distribution_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def write_text_file(path: Path, content: str) -> None:
+def file_mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
+
+
+def write_text_file(path: Path, content: str, mode: int | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+    if mode is not None:
+        path.chmod(mode)
 
 
 def copy_rendered_tree(source_root: Path, target_root: Path, project_name: str) -> None:
@@ -42,20 +48,20 @@ def copy_rendered_tree(source_root: Path, target_root: Path, project_name: str) 
         rel_path = source_path.relative_to(source_root)
         target_path = target_root / rel_path
         rendered = render_text(load_text(source_path), project_name)
-        write_text_file(target_path, rendered)
+        write_text_file(target_path, rendered, file_mode(source_path))
 
 
 def copy_skill_tree(source_root: Path, target_root: Path) -> None:
     for source_path in iter_skill_files(source_root):
         rel_path = source_path.relative_to(source_root)
         target_path = target_root / rel_path
-        write_text_file(target_path, load_text(source_path))
+        write_text_file(target_path, load_text(source_path), file_mode(source_path))
 
 
 def vendor_runtime_bundle(repo_root: Path, target_root: Path) -> None:
     for source_path, rel_target_path in iter_runtime_bundle(repo_root):
         target_path = target_root / rel_target_path
-        write_text_file(target_path, load_text(source_path))
+        write_text_file(target_path, load_text(source_path), file_mode(source_path))
 
 
 def create_empty_directories(target_root: Path) -> None:

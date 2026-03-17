@@ -1,13 +1,19 @@
 import argparse
+import importlib.util
 from pathlib import Path
+
+
+def has_scaffold_support() -> bool:
+    return importlib.util.find_spec("harness_kit.scaffold") is not None
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="harness-kit")
     sub = parser.add_subparsers(dest="command")
-    init_parser = sub.add_parser("init")
-    init_parser.add_argument("--target", required=True)
-    init_parser.add_argument("--project-name", required=True)
+    if has_scaffold_support():
+        init_parser = sub.add_parser("init")
+        init_parser.add_argument("--target", required=True)
+        init_parser.add_argument("--project-name", required=True)
     for name in [
         "claim-task",
         "open-worktree",

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -259,6 +260,19 @@ class TemplatePresenceTest(unittest.TestCase):
         ]:
             self.assertIn(token, refresh_memory_text)
 
+        prepare_review_pack_text = Path(
+            "skills/prepare-review-pack/SKILL.md"
+        ).read_text(encoding="utf-8")
+        for token in [
+            "name: prepare-review-pack",
+            "verification evidence",
+            "`.harness/templates/evidence-pack.md`",
+            "`.harness/templates/commit-pack.md`",
+            "`.harness/templates/pr-pack.md`",
+            "`docs/reviews/`",
+        ]:
+            self.assertIn(token, prepare_review_pack_text)
+
 
 class InitScaffoldTest(unittest.TestCase):
     def test_init_creates_codex_first_repo(self) -> None:
@@ -318,7 +332,9 @@ class InitScaffoldTest(unittest.TestCase):
             self.assertTrue(
                 (target / ".harness" / "templates" / "directory.md").is_file()
             )
-            self.assertTrue((target / "scripts" / "harness" / "run-qa.sh").is_file())
+            run_qa_path = target / "scripts" / "harness" / "run-qa.sh"
+            self.assertTrue(run_qa_path.is_file())
+            self.assertTrue(os.access(run_qa_path, os.X_OK))
             self.assertTrue(
                 (
                     target
@@ -330,15 +346,25 @@ class InitScaffoldTest(unittest.TestCase):
                 ).is_file()
             )
 
-        prepare_review_pack_text = Path(
-            "skills/prepare-review-pack/SKILL.md"
-        ).read_text(encoding="utf-8")
-        for token in [
-            "name: prepare-review-pack",
-            "verification evidence",
-            "`.harness/templates/evidence-pack.md`",
-            "`.harness/templates/commit-pack.md`",
-            "`.harness/templates/pr-pack.md`",
-            "`docs/reviews/`",
-        ]:
-            self.assertIn(token, prepare_review_pack_text)
+            runtime_env = dict(os.environ)
+            runtime_env["PYTHONPATH"] = str(
+                target / "scripts" / "harness" / "runtime"
+            )
+            runtime_help = subprocess.run(
+                [sys.executable, "-m", "harness_kit.cli", "--help"],
+                cwd=target,
+                env=runtime_env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(runtime_help.returncode, 0, runtime_help.stderr)
+            self.assertNotIn("init", runtime_help.stdout)
+            for token in [
+                "claim-task",
+                "open-worktree",
+                "close-worktree",
+                "refresh-memory",
+                "build-review-pack",
+            ]:
+                self.assertIn(token, runtime_help.stdout)
