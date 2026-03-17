@@ -108,16 +108,16 @@ The harness is composed of six primitives.
 
 A curated packet assembled by the controller for a worker or reviewer.
 
-Required fields:
+Required canonical field keys:
 
-- task text
-- why this task exists
-- owned paths
-- required reads
-- disallowed edits
-- constraints
-- verification commands
-- expected report schema
+- `task_text`
+- `why_this_task_exists`
+- `owned_paths`
+- `required_reads`
+- `disallowed_edits`
+- `constraints`
+- `verification_commands`
+- `expected_report_schema`
 
 ### 5.2 ReviewStage
 
@@ -171,6 +171,20 @@ Required lifecycle:
 - attach
 - cleanup or preserve
 
+Phase 1 uses `.harness/runtime/worktree-registry/` as the authoritative lifecycle record for provisioned workspaces.
+
+Required phase-1 registry fields:
+
+- `task_id`
+- `worktree_name`
+- `path`
+- `branch`
+- `status`
+- `baseline_verified`
+- `cleanup_policy`
+
+The queue item `worktree` field is only a mirrored pointer for the currently assigned workspace.
+
 Phase 1 uses Git worktrees as the default provider.
 
 ### 5.6 ModelRoutingPolicy
@@ -183,6 +197,10 @@ There are two related repositories in the ecosystem:
 
 1. `harness-kit` distribution repo
 2. a harness-enabled project repo
+
+The trees below describe the end-state canonical shape.
+
+Phase 1 materializes only the subset called out in Section 16. Future-phase paths may be absent until those phases are implemented.
 
 ### 6.1 Harness Kit Distribution Repo
 
@@ -237,6 +255,7 @@ project-repo/
       qa-rules.md
       doc-update-policy.md
     templates/
+      directory.md
       task.md
       context-pack.md
       evidence-pack.md
@@ -274,6 +293,8 @@ project-repo/
       refresh-memory.sh
       run-qa.sh
       build-review-pack.sh
+      runtime/
+        harness_kit/
 
   .worktrees/
 
@@ -323,6 +344,8 @@ It should define:
 
 This is the main mechanism for keeping local context near the code while keeping the root prompt short.
 
+Generated repositories should also keep a reusable draft template at `.harness/templates/directory.md` so phase-1 automation can create new `DIRECTORY.md` drafts without depending on an external installer.
+
 ### 7.3 `SUMMARY.md`
 
 Repo-wide architecture and operations snapshot for humans and controllers.
@@ -349,39 +372,46 @@ Required metadata:
 
 - `id`
 - `title`
-- `status`
+- `status` (must mirror the directory state; the directory name is authoritative)
 - `priority`
 - `owner_role`
 - `model_hint`
 - `worktree` (nullable until task claim time)
 - `parent_spec`
 - `parent_plan`
+- `why_this_task_exists`
 - `owned_paths`
 - `required_reads`
+- `disallowed_edits`
 - `docs_to_update`
+- `constraints`
 - `verification_commands`
+- `expected_report_schema`
 - `review_stages`
 - `dependencies`
 
-The body contains:
+These fields intentionally make the queue item sufficient for deterministic context-pack generation at task claim time.
 
-- task text
-- acceptance criteria
-- non-goals
+The body contains stable sections for:
+
+- `task_text`
+- `acceptance_criteria`
+- `non_goals`
 
 ### 8.2 Context Pack
 
 Context packs live in `.harness/runtime/context-packs/`.
 
-They must contain:
+They must contain the same canonical field keys defined in Section 5.1:
 
-- verbatim task text
-- short reason this task exists
-- files to read first
-- files not to edit
-- constraints
-- verification instructions
-- expected report schema
+- `task_text`
+- `why_this_task_exists`
+- `owned_paths`
+- `required_reads`
+- `disallowed_edits`
+- `constraints`
+- `verification_commands`
+- `expected_report_schema`
 
 ### 8.3 Evidence Pack
 
@@ -431,6 +461,7 @@ The canonical storage model is:
 | Context pack | `.harness/runtime/context-packs/<id>.md` | No | controller | worker, reviewers | until task completion |
 | Raw evidence | `.harness/runtime/evidence/raw/<id>/` | No | worker, reviewers | controller | until branch finish |
 | Draft review pack | `.harness/runtime/review-packs/drafts/<id>.md` | No | controller or review-pack builder | human reviewer, controller | until branch finish |
+| Worktree registry record | `.harness/runtime/worktree-registry/<task-id>.md` | No | controller or workspace provider | controller, worker | until branch finish |
 | Final review narrative | `docs/reviews/<id>.md` | Yes | controller promotion step | humans, future agents | durable when retention criteria are met |
 
 There is no committed runtime evidence directory in phase 1. Durable evidence lives only as summarized narrative inside a promoted PR review document.
@@ -449,7 +480,7 @@ Queue item states are:
 Allowed transitions:
 
 - `backlog -> ready` when dependencies and prerequisites are satisfied
-- `ready -> in_progress` when claimed; worktree may be assigned at this moment
+- `ready -> in_progress` when claimed; the queue item `worktree` pointer may be assigned at this moment and the authoritative registry record is created when the workspace is provisioned
 - `in_progress -> review` when worker reports `DONE` or `DONE_WITH_CONCERNS`
 - `in_progress -> blocked` when worker reports `BLOCKED`
 - `in_progress -> ready` when worker reports `NEEDS_CONTEXT` and the controller enriches the task packet
@@ -459,13 +490,13 @@ Allowed transitions:
 
 Reviewer verdicts are:
 
-- `approved`
-- `changes_required`
-- `escalate`
+- `APPROVED`
+- `CHANGES_REQUIRED`
+- `ESCALATE`
 
 Loop policy:
 
-- same worker repairs `changes_required`
+- same worker repairs `CHANGES_REQUIRED`
 - each review stage may loop twice before automatic human escalation
 
 ## 9. Subagent and Prompt Architecture
@@ -658,10 +689,15 @@ Adapter policy for phase 1:
 
 Codex uses `AGENTS.md` as the canonical instruction entry point.
 
-Skill loading should support:
+Phase 1 generated repositories must also vendor the minimal Python harness runtime under `scripts/harness/runtime/` so that repo-local wrappers run without requiring a separate global `harness-kit` installation.
 
-- preferred: repo-local `skills/`
-- fallback: linked installation into the Codex skill discovery path
+Phase 1 Codex support guarantees:
+
+- repo-local `AGENTS.md`
+- repo-local `skills/`
+- a documented optional helper for environments that require linking into Codex's external skill discovery path
+
+Phase 1 does not require automatic external skill-link installation. Repo-local operation is the minimum guaranteed behavior.
 
 ### 14.2 Claude Code
 
@@ -726,10 +762,16 @@ Phase 1 is explicitly limited to a Codex-first core:
 - worktree policy
 - Codex adapter
 - `init` installer for new repositories
+- vendored repo-local harness runtime for generated script execution
 - first-pass core automation:
   - queue orchestration
   - memory refresh
   - review-pack assembly
+- phase-1 QA policy interfaces:
+  - rules/lint QA is defined as a policy contract plus repo hook points or command placeholders
+  - adversarial regression is defined as a policy contract plus review template/checklist placeholders
+
+Phase 1 does **not** ship reusable cross-repo packaged implementations of `lint-rules-qa` or `adversarial-regression`.
 
 Phase 2 extends the core with:
 
