@@ -71,8 +71,7 @@ def _verify_worktrees_ignored(repo_root: Path) -> None:
     if result.returncode != 1:
         message = result.stderr.strip() or result.stdout.strip() or "git check-ignore failed"
         raise RuntimeError(message)
-    if not (repo_root / ".gitignore").is_file():
-        raise ValueError("Repository must ignore .worktrees/ in .gitignore.")
+    raise ValueError("Repository must ignore .worktrees/ in .gitignore.")
 
 
 def _run_git(repo_root: Path, args: list[str]) -> None:

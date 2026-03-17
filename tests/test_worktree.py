@@ -132,6 +132,34 @@ class WorktreePathTest(unittest.TestCase):
             self.assertTrue(record.is_file())
             self.assertTrue((repo / ".worktrees" / "task-1").is_dir())
 
+    def test_open_worktree_fails_when_gitignore_lacks_worktrees_rule(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            (repo / ".gitignore").write_text("*.log\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", ".gitignore"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "ignore logs only"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            with self.assertRaises(ValueError):
+                open_worktree(
+                    repo_root=repo,
+                    task_id="task-1",
+                    branch_name="task-1",
+                    cleanup_policy="preserve",
+                )
+
     def test_close_worktree_maps_done_statuses_to_review(self) -> None:
         for worker_status in ["DONE", "DONE_WITH_CONCERNS"]:
             with self.subTest(worker_status=worker_status):
