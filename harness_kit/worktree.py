@@ -10,9 +10,11 @@ from harness_kit.queue import (
     _render_frontmatter,
     _split_frontmatter_block,
     VALID_TRANSITIONS,
+    canonical_task_filename,
     find_task_path,
     load_task,
     move_task,
+    validate_phase1_task_id,
     write_task,
 )
 
@@ -35,11 +37,17 @@ WORKER_STATUS_TO_QUEUE_STATE = {
 
 
 def choose_worktree_path(repo_root: Path, task_id: str) -> Path:
-    return repo_root / ".worktrees" / task_id
+    return repo_root / ".worktrees" / validate_phase1_task_id(task_id)
 
 
 def _registry_record_path(repo_root: Path, task_id: str) -> Path:
-    return repo_root / ".harness" / "runtime" / "worktree-registry" / f"{task_id}.md"
+    return (
+        repo_root
+        / ".harness"
+        / "runtime"
+        / "worktree-registry"
+        / canonical_task_filename(task_id)
+    )
 
 
 def _is_git_repo(repo_root: Path) -> bool:
@@ -148,6 +156,7 @@ def open_worktree(
     branch_name: str,
     cleanup_policy: str,
 ) -> Path:
+    task_id = validate_phase1_task_id(task_id)
     if cleanup_policy not in {"preserve", "delete"}:
         raise ValueError(f"Unsupported cleanup policy: {cleanup_policy}")
     worktree_name = task_id
@@ -178,6 +187,7 @@ def close_worktree(
     mode: str,
     worker_status: str,
 ) -> tuple[Path | None, Path]:
+    task_id = validate_phase1_task_id(task_id)
     if worker_status not in WORKER_STATUS_TO_QUEUE_STATE:
         raise ValueError(f"Unsupported worker status: {worker_status}")
     if mode not in {"preserve", "delete"}:

@@ -565,3 +565,30 @@ class InitScaffoldTest(unittest.TestCase):
                 ).is_file()
             )
             self.assertTrue((target / "docs" / "reviews" / "queue-test.md").is_file())
+
+    def test_init_refuses_non_empty_target_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "existing-repo"
+            target.mkdir()
+            readme = target / "README.md"
+            readme.write_text("preexisting\n", encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "harness_kit.cli",
+                    "init",
+                    "--target",
+                    str(target),
+                    "--project-name",
+                    "existing-repo",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertEqual(readme.read_text(encoding="utf-8"), "preexisting\n")
+            self.assertFalse((target / "AGENTS.md").exists())

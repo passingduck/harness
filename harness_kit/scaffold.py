@@ -72,7 +72,15 @@ def create_empty_directories(target_root: Path) -> None:
 def init_project(target: Path, project_name: str) -> Path:
     repo_root = distribution_root()
     target = target.resolve()
-    target.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if not target.is_dir():
+            raise FileExistsError(f"Init target exists and is not a directory: {target}")
+        if any(target.iterdir()):
+            raise FileExistsError(
+                f"Init target directory must be empty for phase 1 scaffold creation: {target}"
+            )
+    else:
+        target.mkdir(parents=True, exist_ok=True)
 
     copy_rendered_tree(repo_root / "templates" / "project", target, project_name)
     copy_skill_tree(repo_root / "skills", target / "skills")

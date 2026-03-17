@@ -112,3 +112,33 @@ class QueueStateAuthorityTest(unittest.TestCase):
             context_text = context_pack.read_text(encoding="utf-8")
             self.assertIn("## Implementation Notes", context_text)
             self.assertIn("Keep nested guidance.", context_text)
+
+    def test_claim_task_rejects_unsafe_queue_identifier(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = root / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
+            task.parent.mkdir(parents=True)
+            task.write_text(
+                TASK_TEXT.replace("id: task-1", "id: ../escape"),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ValueError):
+                claim_task(task_path=task, repo_root=root)
+
+            self.assertFalse((root / ".harness" / "runtime" / "escape.md").exists())
+
+    def test_claim_task_rejects_filename_and_frontmatter_id_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = root / ".harness" / "runtime" / "queue" / "ready" / "not-the-id.md"
+            task.parent.mkdir(parents=True)
+            task.write_text(TASK_TEXT, encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                claim_task(task_path=task, repo_root=root)
+
+            self.assertTrue(task.is_file())
+            self.assertFalse(
+                (root / ".harness" / "runtime" / "queue" / "in_progress" / "task-1.md").exists()
+            )

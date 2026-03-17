@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any
 
 
@@ -75,6 +76,7 @@ CONTEXT_PACK_FIELDS = (
     "verification_commands",
     "expected_report_schema",
 )
+TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
 @dataclass
@@ -86,6 +88,20 @@ class QueueTask:
     @property
     def state(self) -> str:
         return str(self.frontmatter["status"])
+
+
+def validate_phase1_task_id(task_id: str, field_name: str = "task id") -> str:
+    if not isinstance(task_id, str) or not task_id:
+        raise ValueError(f"{field_name} must be a non-empty string.")
+    if not TASK_ID_PATTERN.fullmatch(task_id):
+        raise ValueError(
+            f"{field_name} must use only phase-1-safe characters: letters, digits, hyphen, underscore."
+        )
+    return task_id
+
+
+def canonical_task_filename(task_id: str) -> str:
+    return f"{validate_phase1_task_id(task_id)}.md"
 
 
 def _split_frontmatter_block(text: str) -> tuple[str, str]:
@@ -216,12 +232,15 @@ def _validate_frontmatter(frontmatter: dict[str, Any]) -> None:
         value = frontmatter[field]
         if not isinstance(value, str) or not value:
             raise ValueError(f"Queue field {field!r} must be a non-empty string.")
+    validate_phase1_task_id(frontmatter["id"], "Queue field 'id'")
     status = frontmatter["status"]
     if not isinstance(status, str) or status not in VALID_STATES:
         raise ValueError("Queue field 'status' must be a valid queue state.")
     worktree = frontmatter["worktree"]
     if worktree is not None and (not isinstance(worktree, str) or not worktree):
         raise ValueError("Queue field 'worktree' must be null or a non-empty string.")
+    if isinstance(worktree, str):
+        validate_phase1_task_id(worktree, "Queue field 'worktree'")
     for field in LIST_FIELDS:
         value = frontmatter[field]
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
@@ -240,6 +259,11 @@ def load_task(task_path: Path) -> QueueTask:
     _validate_frontmatter(frontmatter)
     sections = _parse_body_sections(body_text)
     _validate_sections(sections)
+    expected_name = canonical_task_filename(frontmatter["id"])
+    if task_path.name != expected_name:
+        raise ValueError(
+            f"Queue item filename must match frontmatter id: expected {expected_name}, got {task_path.name}"
+        )
     directory_state = task_path.parent.name
     if directory_state not in VALID_STATES:
         raise ValueError(f"Unsupported queue state directory: {directory_state}")
@@ -300,7 +324,11 @@ def claim_task(task_path: Path, repo_root: Path) -> tuple[Path, Path]:
     claimed_path = move_task(task.path, "in_progress")
     claimed_task = load_task(claimed_path)
     context_pack_path = (
-        repo_root / ".harness" / "runtime" / "context-packs" / f"{frontmatter['id']}.md"
+        repo_root
+        / ".harness"
+        / "runtime"
+        / "context-packs"
+        / canonical_task_filename(frontmatter["id"])
     )
     context_pack_path.parent.mkdir(parents=True, exist_ok=True)
     context_pack_path.write_text(render_context_pack(claimed_task), encoding="utf-8")
@@ -308,9 +336,10 @@ def claim_task(task_path: Path, repo_root: Path) -> tuple[Path, Path]:
 
 
 def find_task_path(repo_root: Path, task_id: str) -> Path | None:
+    task_id = validate_phase1_task_id(task_id)
     queue_root = repo_root / ".harness" / "runtime" / "queue"
     for state in VALID_STATES:
-        candidate = queue_root / state / f"{task_id}.md"
+        candidate = queue_root / state / canonical_task_filename(task_id)
         if candidate.is_file():
             return candidate
     return None

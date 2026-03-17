@@ -190,6 +190,23 @@ class WorktreePathTest(unittest.TestCase):
                 (repo / ".harness" / "runtime" / "worktree-registry").exists()
             )
 
+    def test_open_worktree_rejects_unsafe_task_identifier(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+
+            with self.assertRaises(ValueError):
+                open_worktree(
+                    repo_root=repo,
+                    task_id="../escaped",
+                    branch_name="task-1",
+                    cleanup_policy="preserve",
+                )
+
+            self.assertFalse((repo / ".worktrees").exists())
+            self.assertFalse(
+                (repo / ".harness" / "runtime" / "worktree-registry").exists()
+            )
+
     def test_close_worktree_maps_done_statuses_to_review(self) -> None:
         for worker_status in ["DONE", "DONE_WITH_CONCERNS"]:
             with self.subTest(worker_status=worker_status):
