@@ -1,0 +1,22 @@
+verdicts:
+  - APPROVED
+  - CHANGES_REQUIRED
+  - ESCALATE
+
+review_result_fields:
+  - stage
+  - verdict
+  - blocking_issues
+  - advisory_notes
+  - evidence_refs
+  - next_action
+
+stages:
+  - stage: spec_scope_review
+    purpose: Confirm the requested scope and constraints are still correct.
+  - stage: rules_lint_review
+    purpose: Run project rules and lint checks defined by the repo.
+  - stage: adversarial_regression_review
+    purpose: Probe likely regressions and abuse cases before human handoff.
+  - stage: human_review_pack_review
+    purpose: Validate the review narrative and remaining risks.

@@ -1,0 +1,11 @@
+default: gpt-5.4
+planner: gpt-5.4
+implementer: gpt-5.4
+spec_reviewer: gpt-5.4
+quality_reviewer: gpt-5.4
+adversarial_regression_reviewer: gpt-5.4
+inventory_only:
+  model: gpt-5.1-codex-mini
+  allowed_for:
+    - shallow file inventory
+    - grep-style indexing
