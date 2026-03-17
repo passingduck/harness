@@ -60,15 +60,18 @@ def _ensure_worktree_roots(repo_root: Path) -> None:
 def _verify_worktrees_ignored(repo_root: Path) -> None:
     if not _is_git_repo(repo_root):
         return
-    gitignore_path = repo_root / ".gitignore"
-    if not gitignore_path.is_file():
-        raise ValueError("Repository must ignore .worktrees/ in .gitignore.")
-    ignored_entries = {
-        line.strip()
-        for line in gitignore_path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    }
-    if ".worktrees/" not in ignored_entries:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "check-ignore", "-q", "--", ".worktrees/.probe"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return
+    if result.returncode != 1:
+        message = result.stderr.strip() or result.stdout.strip() or "git check-ignore failed"
+        raise RuntimeError(message)
+    if not (repo_root / ".gitignore").is_file():
         raise ValueError("Repository must ignore .worktrees/ in .gitignore.")
 
 
@@ -156,18 +159,9 @@ def close_worktree(
         raise ValueError(f"Unsupported worktree close mode: {mode}")
     _ensure_worktree_roots(repo_root)
     record_path = _registry_record_path(repo_root, task_id)
-    if record_path.is_file():
-        record = _read_registry_record(record_path)
-    else:
-        record = {
-            "task_id": task_id,
-            "worktree_name": task_id,
-            "path": str(choose_worktree_path(repo_root, task_id)),
-            "branch": task_id,
-            "status": "attached",
-            "baseline_verified": False,
-            "cleanup_policy": mode,
-        }
+    if not record_path.is_file():
+        raise FileNotFoundError(f"Missing worktree registry record: {record_path}")
+    record = _read_registry_record(record_path)
     worktree_path = Path(str(record["path"]))
     if mode == "delete":
         _remove_worktree(repo_root, worktree_path)

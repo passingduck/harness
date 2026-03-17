@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+import subprocess
 import unittest
 
 from harness_kit.queue import claim_task
@@ -48,6 +49,32 @@ Implement the queue contract.
 
 
 class WorktreePathTest(unittest.TestCase):
+    def _init_git_repo(self, repo: Path) -> None:
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "config", "user.name", "Harness Tests"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "harness-tests@example.com"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        (repo / "README.md").write_text("test repo\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
     def test_choose_worktree_path_uses_project_local_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -74,6 +101,36 @@ class WorktreePathTest(unittest.TestCase):
             self.assertIn("status: attached", text)
             self.assertIn("baseline_verified: true", text)
             self.assertIn("cleanup_policy: preserve", text)
+
+    def test_open_worktree_accepts_effective_gitignore_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            (repo / ".gitignore").write_text("/.worktrees/\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", ".gitignore"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "ignore worktrees"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            record = open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            self.assertTrue(record.is_file())
+            self.assertTrue((repo / ".worktrees" / "task-1").is_dir())
 
     def test_close_worktree_maps_done_statuses_to_review(self) -> None:
         for worker_status in ["DONE", "DONE_WITH_CONCERNS"]:
@@ -169,3 +226,21 @@ class WorktreePathTest(unittest.TestCase):
 
             self.assertIn("status: deleted", record.read_text(encoding="utf-8"))
 
+    def test_close_worktree_requires_existing_registry_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = root / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
+            task.parent.mkdir(parents=True)
+            task.write_text(TASK_TEXT, encoding="utf-8")
+            claimed_task, _ = claim_task(task_path=task, repo_root=root)
+
+            with self.assertRaises(FileNotFoundError):
+                close_worktree(
+                    repo_root=root,
+                    task_id="task-1",
+                    mode="preserve",
+                    worker_status="DONE",
+                )
+
+            self.assertTrue(claimed_task.is_file())
+            self.assertEqual(claimed_task.parent.name, "in_progress")
