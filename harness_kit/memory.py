@@ -14,6 +14,9 @@ KNOWN_FILE_NAMES = {
     "REQUIREMENT.md",
     "SUMMARY.md",
 }
+NON_MEANINGFUL_DIRECTORY_NAMES = {
+    "models",
+}
 
 
 def _normalize_changed_path(changed_path: str) -> PurePosixPath | None:
@@ -30,40 +33,30 @@ def _normalize_changed_path(changed_path: str) -> PurePosixPath | None:
 
 def _directory_for_changed_path(changed_path: PurePosixPath) -> PurePosixPath:
     if changed_path.name == DIRECTORY_GUIDE_NAME:
-        return changed_path.parent
-    if (
+        directory = changed_path.parent
+    elif (
         changed_path.suffix
         or changed_path.name in KNOWN_FILE_NAMES
         or changed_path.name.startswith(".")
     ):
-        return changed_path.parent
-    return changed_path
+        directory = changed_path.parent
+    else:
+        directory = changed_path
+    while directory.name in NON_MEANINGFUL_DIRECTORY_NAMES and directory.parent != directory:
+        directory = directory.parent
+    return directory
 
 
 def compute_directory_guides_to_refresh(changed_paths: list[str]) -> set[str]:
-    guide_paths: list[PurePosixPath] = []
+    guides: set[str] = set()
     for changed_path in changed_paths:
         normalized = _normalize_changed_path(changed_path)
         if normalized is None:
             continue
         directory = _directory_for_changed_path(normalized)
-        guide_paths.append(directory / DIRECTORY_GUIDE_NAME)
-
-    collapsed_directories: list[PurePosixPath] = []
-    for guide in sorted(guide_paths, key=lambda path: (len(path.parts), path.as_posix())):
-        guide_directory = guide.parent
-        if any(
-            guide_directory.is_relative_to(existing_directory)
-            for existing_directory in collapsed_directories
-        ):
-            continue
-        collapsed_directories.append(guide_directory)
-    return {
-        (directory / DIRECTORY_GUIDE_NAME).as_posix()
-        if directory.parts
-        else DIRECTORY_GUIDE_NAME
-        for directory in collapsed_directories
-    }
+        guide = directory / DIRECTORY_GUIDE_NAME
+        guides.add(guide.as_posix() if guide.parts else DIRECTORY_GUIDE_NAME)
+    return guides
 
 
 def _resolve_repo_relative_path(repo_root: Path, rel_path: Path) -> Path:

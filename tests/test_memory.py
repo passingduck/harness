@@ -30,6 +30,22 @@ class MemoryRefreshTest(unittest.TestCase):
 
         self.assertEqual(guides, {"src/payments/reconciliation/DIRECTORY.md"})
 
+    def test_preserves_parent_and_child_guides_when_both_are_directly_implicated(self) -> None:
+        guides = compute_directory_guides_to_refresh(
+            [
+                "src/payments/service.py",
+                "src/payments/api/client.py",
+            ]
+        )
+
+        self.assertEqual(
+            guides,
+            {
+                "src/payments/DIRECTORY.md",
+                "src/payments/api/DIRECTORY.md",
+            },
+        )
+
     def test_creates_missing_directory_guide_from_repo_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
