@@ -1,0 +1,91 @@
+import tempfile
+from pathlib import Path
+import unittest
+
+from harness_kit.memory import (
+    compute_directory_guides_to_refresh,
+    ensure_directory_guide,
+    refresh_memory,
+)
+
+
+class MemoryRefreshTest(unittest.TestCase):
+    def test_maps_changed_files_to_directory_guides(self) -> None:
+        guides = compute_directory_guides_to_refresh(
+            ["src/payments/service.py", "tests/payments/test_service.py"]
+        )
+
+        self.assertEqual(
+            guides,
+            {"src/payments/DIRECTORY.md", "tests/payments/DIRECTORY.md"},
+        )
+
+    def test_prefers_nearest_meaningful_directory_for_nested_files(self) -> None:
+        guides = compute_directory_guides_to_refresh(
+            [
+                "src/payments/reconciliation/service.py",
+                "src/payments/reconciliation/models/schema.py",
+            ]
+        )
+
+        self.assertEqual(guides, {"src/payments/reconciliation/DIRECTORY.md"})
+
+    def test_creates_missing_directory_guide_from_repo_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            template = repo / ".harness" / "templates" / "directory.md"
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text("# Directory Guide\n", encoding="utf-8")
+
+            draft = ensure_directory_guide(repo, Path("src/payments/DIRECTORY.md"))
+
+            self.assertTrue(draft.is_file())
+            self.assertEqual(draft, repo / "src" / "payments" / "DIRECTORY.md")
+            self.assertIn("Directory Guide", draft.read_text(encoding="utf-8"))
+
+    def test_keeps_existing_directory_guide_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            guide = repo / "src" / "payments" / "DIRECTORY.md"
+            guide.parent.mkdir(parents=True, exist_ok=True)
+            guide.write_text("existing\n", encoding="utf-8")
+
+            ensured = ensure_directory_guide(repo, Path("src/payments/DIRECTORY.md"))
+
+            self.assertEqual(ensured.read_text(encoding="utf-8"), "existing\n")
+
+    def test_refresh_memory_returns_created_guides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            template = repo / ".harness" / "templates" / "directory.md"
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text("# Directory Guide\n", encoding="utf-8")
+
+            guides = refresh_memory(
+                repo_root=repo,
+                changed_paths=[
+                    "src/payments/service.py",
+                    "tests/payments/test_service.py",
+                ],
+            )
+
+            self.assertEqual(
+                guides,
+                [
+                    repo / "src" / "payments" / "DIRECTORY.md",
+                    repo / "tests" / "payments" / "DIRECTORY.md",
+                ],
+            )
+            for guide in guides:
+                self.assertTrue(guide.is_file())
+
+    def test_raises_when_directory_template_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+
+            with self.assertRaises(FileNotFoundError):
+                ensure_directory_guide(repo, Path("src/payments/DIRECTORY.md"))
+
+
+if __name__ == "__main__":
+    unittest.main()

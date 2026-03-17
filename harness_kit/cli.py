@@ -38,15 +38,44 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
     )
 
-    sub.add_parser("refresh-memory")
-    sub.add_parser("build-review-pack")
+    refresh_parser = sub.add_parser("refresh-memory")
+    refresh_parser.add_argument("--repo-root", required=True)
+    refresh_parser.add_argument(
+        "--changed-path",
+        dest="changed_paths",
+        action="append",
+        required=True,
+    )
+
+    review_pack_parser = sub.add_parser("build-review-pack")
+    review_pack_parser.add_argument("--repo-root", required=True)
+    review_pack_parser.add_argument(
+        "--type",
+        dest="review_type",
+        choices=["commit", "pr"],
+        required=True,
+    )
+    review_pack_parser.add_argument("--title", required=True)
+    review_pack_parser.add_argument(
+        "--changed-path",
+        dest="changed_paths",
+        action="append",
+        required=True,
+    )
+    review_pack_parser.add_argument(
+        "--verification-command",
+        dest="verification_commands",
+        action="append",
+        required=True,
+    )
+    review_pack_parser.add_argument("--promote-to")
     return parser
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    repo_root = Path(getattr(args, "repo_root", "."))
+    repo_root = Path(getattr(args, "repo_root", ".")).resolve()
     if args.command == "init":
         from harness_kit.scaffold import init_project
 
@@ -86,6 +115,33 @@ def main() -> int:
         if moved_task is not None:
             print(moved_task)
         print(record)
+    elif args.command == "refresh-memory":
+        from harness_kit.memory import refresh_memory
+
+        for guide in refresh_memory(
+            repo_root=repo_root,
+            changed_paths=args.changed_paths,
+        ):
+            print(guide)
+    elif args.command == "build-review-pack":
+        from harness_kit.review_pack import build_review_pack, promote_review_pack
+
+        draft = build_review_pack(
+            repo_root=repo_root,
+            review_type=args.review_type,
+            title=args.title,
+            changed_paths=args.changed_paths,
+            verification_commands=args.verification_commands,
+        )
+        print(draft)
+        if args.promote_to:
+            print(
+                promote_review_pack(
+                    repo_root=repo_root,
+                    draft_path=draft.relative_to(repo_root),
+                    promote_to=Path(args.promote_to),
+                )
+            )
     return 0
 
 
