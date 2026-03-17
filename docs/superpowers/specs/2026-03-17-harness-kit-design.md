@@ -185,6 +185,8 @@ Required phase-1 registry fields:
 
 The queue item `worktree` field is only a mirrored pointer for the currently assigned workspace.
 
+Phase 1 requires `worktree_name == task_id`. The fields remain separate only to preserve a future-compatible contract.
+
 Phase 1 uses Git worktrees as the default provider.
 
 ### 5.6 ModelRoutingPolicy
@@ -499,6 +501,8 @@ Loop policy:
 - same worker repairs `CHANGES_REQUIRED`
 - each review stage may loop twice before automatic human escalation
 
+Phase 1 may surface `WorkerStatus` through a `close-worktree` style controller command instead of a separate worker-report artifact. Separate worker report documents are deferred.
+
 ## 9. Subagent and Prompt Architecture
 
 The harness should borrow strong prompt architecture patterns from proven skill systems without copying tool-specific assumptions.
@@ -641,6 +645,8 @@ Ignore these by default:
 - temporary logs and local artifacts
 
 The rule is simple: persistent knowledge and reusable policy belong in git; volatile execution state does not.
+
+Because ignored empty directories are not clone-stable, every phase-1 command that writes runtime state must lazily create the required `.harness/runtime/*` or `.worktrees/*` parent directories before writing.
 
 ## 13. PR Gate and Human Review Mode
 

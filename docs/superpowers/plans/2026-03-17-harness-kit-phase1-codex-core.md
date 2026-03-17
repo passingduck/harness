@@ -290,6 +290,15 @@ class TemplatePresenceTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("APPROVED", review_stage_text)
         self.assertIn("CHANGES_REQUIRED", review_stage_text)
+        for token in [
+            "stage",
+            "verdict",
+            "blocking_issues",
+            "advisory_notes",
+            "evidence_refs",
+            "next_action",
+        ]:
+            self.assertIn(token, review_stage_text)
         context_pack_text = Path(
             "templates/project/.harness/templates/context-pack.md"
         ).read_text(encoding="utf-8")
@@ -322,6 +331,13 @@ Template requirements:
 - `AGENTS.md` must declare instruction priority, required reads, default workflow, model routing default, documentation gate, QA gate, worktree rule, output convention
 - `model-routing.yaml` must include the concrete phase-1 mapping from the spec, with `gpt-5.4` for judgment-heavy roles and `gpt-5.1-codex-mini` only for inventory-only work
 - `review-stages.yaml` must use uppercase verdicts: `APPROVED`, `CHANGES_REQUIRED`, `ESCALATE`
+- `review-stages.yaml` must also encode the required review-result fields:
+  - `stage`
+  - `verdict`
+  - `blocking_issues`
+  - `advisory_notes`
+  - `evidence_refs`
+  - `next_action`
 - `context-pack.md` must use the exact contract names:
   - `why_this_task_exists`
   - `owned_paths`
@@ -474,6 +490,12 @@ def render_text(template: str, project_name: str) -> str:
   - `.worktrees`
 - print the generated root path
 
+Phase-1 note:
+
+- end-state `scripts/harness/init.sh` remains deferred
+- the only required initializer in this plan is distribution-level `install/init-project.sh`
+- runtime-writing commands added later in the plan must still recreate missing ignored directories lazily after clone
+
 `harness_kit/cli.py` should implement:
 
 - `init --target PATH --project-name NAME`
@@ -585,12 +607,10 @@ class QueueStateAuthorityTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            claimed_task, context_pack = claim_task(
-                task_path=task,
-                repo_root=root,
-                worktree_name="task-1",
-            )
+            claimed_task, context_pack = claim_task(task_path=task, repo_root=root)
             self.assertEqual(claimed_task.parent.name, "in_progress")
+            self.assertIn("worktree: task-1", claimed_task.read_text(encoding="utf-8"))
+            self.assertTrue((root / ".harness" / "runtime" / "context-packs").is_dir())
             self.assertTrue(context_pack.is_file())
             context_text = context_pack.read_text(encoding="utf-8")
             self.assertIn("task_text", context_text)
@@ -609,7 +629,8 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from harness_kit.worktree import choose_worktree_path, write_worktree_registry_record
+from harness_kit.queue import claim_task
+from harness_kit.worktree import choose_worktree_path, close_worktree, open_worktree
 
 
 class WorktreePathTest(unittest.TestCase):
@@ -619,20 +640,95 @@ class WorktreePathTest(unittest.TestCase):
             path = choose_worktree_path(repo, "task-1")
             self.assertEqual(path, repo / ".worktrees" / "task-1")
 
-    def test_registry_record_is_authoritative(self) -> None:
+    def test_open_worktree_marks_baseline_verified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            record = write_worktree_registry_record(
+            record = open_worktree(
                 repo_root=repo,
                 task_id="task-1",
-                worktree_name="task-1",
-                worktree_path=repo / ".worktrees" / "task-1",
                 branch_name="task-1",
                 cleanup_policy="preserve",
             )
+            self.assertTrue((repo / ".harness" / "runtime" / "worktree-registry").is_dir())
+            self.assertTrue((repo / ".worktrees").is_dir())
             text = record.read_text(encoding="utf-8")
-            self.assertIn("status: provisioned", text)
-            self.assertIn("baseline_verified: false", text)
+            self.assertIn("status: attached", text)
+            self.assertIn("baseline_verified: true", text)
+
+    def test_close_worktree_uses_worker_status_for_queue_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = root / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
+            task.parent.mkdir(parents=True)
+            task.write_text(
+                (
+                    "---\n"
+                    "id: task-1\n"
+                    "title: Queue contract test\n"
+                    "status: ready\n"
+                    "priority: high\n"
+                    "owner_role: implementer\n"
+                    "model_hint: gpt-5.4\n"
+                    "worktree: null\n"
+                    "parent_spec: docs/specs/spec.md\n"
+                    "parent_plan: docs/plans/plan.md\n"
+                    "why_this_task_exists: Preserve queue determinism\n"
+                    "owned_paths:\n"
+                    "  - src/payments\n"
+                    "required_reads:\n"
+                    "  - AGENTS.md\n"
+                    "disallowed_edits:\n"
+                    "  - infra/\n"
+                    "docs_to_update:\n"
+                    "  - src/payments/DIRECTORY.md\n"
+                    "constraints:\n"
+                    "  - stay within payments scope\n"
+                    "verification_commands:\n"
+                    "  - python3 -m unittest tests.test_queue -v\n"
+                    "expected_report_schema:\n"
+                    "  - status\n"
+                    "review_stages:\n"
+                    "  - spec_scope\n"
+                    "dependencies: []\n"
+                    "---\n"
+                    "## task_text\nImplement the queue contract.\n"
+                    "## acceptance_criteria\n- context pack written\n"
+                    "## non_goals\n- no phase 2 adapter work\n"
+                ),
+                encoding="utf-8",
+            )
+            claimed_task, _ = claim_task(task_path=task, repo_root=root)
+            open_worktree(
+                repo_root=root,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+            closed_task, record = close_worktree(
+                repo_root=root,
+                task_id="task-1",
+                mode="preserve",
+                worker_status="DONE",
+            )
+            self.assertEqual(closed_task.parent.name, "review")
+            self.assertIn("status: preserved", record.read_text(encoding="utf-8"))
+
+    def test_close_worktree_delete_marks_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            open_worktree(
+                repo_root=root,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="delete",
+            )
+            _, record = close_worktree(
+                repo_root=root,
+                task_id="task-1",
+                mode="delete",
+                worker_status="DONE_WITH_CONCERNS",
+            )
+            self.assertIn("status: deleted", record.read_text(encoding="utf-8"))
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**
@@ -646,7 +742,13 @@ Expected: FAIL because queue module does not exist
 Run: `python3 -m unittest tests.test_worktree.WorktreePathTest.test_uses_project_local_worktrees_directory -v`
 Expected: FAIL because worktree module does not exist
 
-Run: `python3 -m unittest tests.test_worktree.WorktreePathTest.test_registry_record_is_authoritative -v`
+Run: `python3 -m unittest tests.test_worktree.WorktreePathTest.test_open_worktree_marks_baseline_verified -v`
+Expected: FAIL because worktree module does not exist
+
+Run: `python3 -m unittest tests.test_worktree.WorktreePathTest.test_close_worktree_uses_worker_status_for_queue_transition -v`
+Expected: FAIL because worktree module does not exist
+
+Run: `python3 -m unittest tests.test_worktree.WorktreePathTest.test_close_worktree_delete_marks_cleanup -v`
 Expected: FAIL because worktree module does not exist
 
 - [ ] **Step 4: Implement queue state authority and transitions**
@@ -679,10 +781,12 @@ Expected: FAIL because worktree module does not exist
 - update frontmatter `status` to mirror the directory state
 - reject invalid transitions
 - keep `worktree` nullable until claim time
+- in phase 1, assign `worktree == id` at claim time so `task_id` is the only workspace identity source
 - implement `claim_task(...)` that:
   - moves a queue item from `ready` to `in_progress`
-  - assigns `worktree`
+  - assigns `worktree` equal to the task id
   - writes `.harness/runtime/context-packs/<id>.md`
+  - lazily creates missing runtime parent directories before writing
   - copies the canonical context-pack fields from the queue contract into that file
 
 Minimal interface:
@@ -704,9 +808,16 @@ VALID_TRANSITIONS = {
 
 - resolve `.worktrees/<task-id>`
 - verify `.worktrees/` is ignored when inside a repo
+- lazily create missing `.harness/runtime/*` and `.worktrees/*` parents before writing
 - expose open/close helpers that shell out to `git worktree`
 - write authoritative registry records under `.harness/runtime/worktree-registry/<task-id>.md`
 - treat the registry record as authoritative for workspace lifecycle, with queue-item `worktree` as a mirrored pointer only
+- in phase 1, require `worktree_name == task_id`
+- `open_worktree(...)` must provision, baseline verify, attach, and then persist `baseline_verified: true`
+- `close_worktree(...)` must preserve or delete the workspace according to `mode`, persist the resulting lifecycle status, and update queue state from typed worker status:
+  - `DONE` or `DONE_WITH_CONCERNS` -> move queue item to `review`
+  - `NEEDS_CONTEXT` -> move queue item to `ready`
+  - `BLOCKED` -> move queue item to `blocked`
 - record at least:
   - `task_id`
   - `worktree_name`
@@ -720,9 +831,9 @@ VALID_TRANSITIONS = {
 
 `harness_kit/cli.py` must implement:
 
-- `claim-task --repo-root PATH --task PATH --worktree-name NAME`
+- `claim-task --repo-root PATH --task PATH`
 - `open-worktree --repo-root PATH --task-id ID --branch NAME [--cleanup-policy preserve|delete]`
-- `close-worktree --repo-root PATH --task-id ID --mode preserve|delete`
+- `close-worktree --repo-root PATH --task-id ID --mode preserve|delete --worker-status DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED`
 
 `templates/project/scripts/harness/*.sh` should forward to the vendored runtime, for example:
 
@@ -770,7 +881,7 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from harness_kit.memory import compute_directory_guides_to_refresh
+from harness_kit.memory import compute_directory_guides_to_refresh, ensure_directory_guide
 
 
 class MemoryRefreshTest(unittest.TestCase):
@@ -778,6 +889,19 @@ class MemoryRefreshTest(unittest.TestCase):
         changed = ["src/payments/service.py", "tests/payments/test_service.py"]
         guides = compute_directory_guides_to_refresh(changed)
         self.assertEqual(guides, {"src/payments/DIRECTORY.md", "tests/payments/DIRECTORY.md"})
+
+    def test_creates_missing_directory_guide_from_repo_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            template = repo / ".harness" / "templates" / "directory.md"
+            template.parent.mkdir(parents=True)
+            template.write_text("# Directory Guide\n", encoding="utf-8")
+            draft = ensure_directory_guide(
+                repo_root=repo,
+                guide_path=Path("src/payments/DIRECTORY.md"),
+            )
+            self.assertTrue(draft.is_file())
+            self.assertIn("Directory Guide", draft.read_text(encoding="utf-8"))
 ```
 
 - [ ] **Step 2: Write the failing review-pack test**
@@ -787,7 +911,7 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from harness_kit.review_pack import build_pr_review_pack
+from harness_kit.review_pack import build_pr_review_pack, promote_review_pack
 
 
 class ReviewPackTest(unittest.TestCase):
@@ -804,6 +928,23 @@ class ReviewPackTest(unittest.TestCase):
             text = pack.read_text(encoding="utf-8")
             self.assertIn("Queue state fix", text)
             self.assertIn("python3 -m unittest tests.test_queue -v", text)
+
+    def test_promotes_pr_review_pack_into_docs_reviews(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            draft = build_pr_review_pack(
+                repo_root=repo,
+                title="Queue state fix",
+                changed_paths=["AGENTS.md"],
+                verification_commands=["true"],
+            )
+            promoted = promote_review_pack(
+                repo_root=repo,
+                draft_path=draft,
+                promote_to=Path("docs/reviews/queue-state-fix.md"),
+            )
+            self.assertTrue(promoted.is_file())
+            self.assertIn("Queue state fix", promoted.read_text(encoding="utf-8"))
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**
@@ -818,6 +959,7 @@ Expected: FAIL because memory/review-pack modules do not exist
 - accept changed paths
 - map them to nearest meaningful directory guides
 - create missing `DIRECTORY.md` drafts from `.harness/templates/directory.md` inside the generated repo
+- lazily create missing parent directories before writing the guide
 - return the guide list so the agent can fill semantic content
 
 This is draft generation only, not automatic semantic summarization.
@@ -829,6 +971,7 @@ This is draft generation only, not automatic semantic summarization.
 - create runtime draft files under `.harness/runtime/review-packs/drafts/`
 - support commit and PR pack skeletons
 - support optional promotion into `docs/reviews/`
+- lazily create runtime and promoted-review parent directories before writing
 - never store durable raw evidence outside the promoted narrative
 
 `harness_kit/cli.py` must implement:
@@ -900,10 +1043,15 @@ The integration test must:
   - `docs/plans/`
   - `docs/reviews/`
 - create a sample queue item
-- run `scripts/harness/claim-task.sh --repo-root . --task .harness/runtime/queue/ready/task-1.md --worktree-name task-1` inside the generated repo and confirm it creates `.harness/runtime/context-packs/<id>.md`
+- delete the generated runtime directories that git would not preserve across clone:
+  - `.harness/runtime/context-packs/`
+  - `.harness/runtime/review-packs/drafts/`
+  - `.harness/runtime/worktree-registry/`
+  - `.worktrees/`
+- run `scripts/harness/claim-task.sh --repo-root . --task .harness/runtime/queue/ready/task-1.md` inside the generated repo and confirm it recreates `.harness/runtime/context-packs/` and writes `.harness/runtime/context-packs/<id>.md`
 - run `scripts/harness/open-worktree.sh --repo-root . --task-id task-1 --branch task-1 --cleanup-policy preserve` inside the generated repo and confirm it creates `.harness/runtime/worktree-registry/<id>.md`
-- move the task through `ready -> in_progress -> review`
-- run `scripts/harness/build-review-pack.sh --repo-root . --type pr --title "Queue test" --changed-path AGENTS.md --verification-command true` inside the generated repo and confirm it creates a draft review pack
+- run `scripts/harness/close-worktree.sh --repo-root . --task-id task-1 --mode preserve --worker-status DONE` inside the generated repo and confirm it moves the queue item to `review`
+- run `scripts/harness/build-review-pack.sh --repo-root . --type pr --title "Queue test" --changed-path AGENTS.md --verification-command true --promote-to docs/reviews/queue-test.md` inside the generated repo and confirm it recreates missing draft directories and writes both the runtime draft and the promoted review doc
 
 - [ ] **Step 2: Run the integration test to verify it fails**
 
