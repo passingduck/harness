@@ -46,6 +46,11 @@ class MemoryRefreshTest(unittest.TestCase):
             },
         )
 
+    def test_helper_maps_extensionless_path_to_parent_directory_guide(self) -> None:
+        guides = compute_directory_guides_to_refresh(["bin/deploy"])
+
+        self.assertEqual(guides, {"bin/DIRECTORY.md"})
+
     def test_creates_missing_directory_guide_from_repo_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

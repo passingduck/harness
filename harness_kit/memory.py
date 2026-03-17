@@ -79,13 +79,29 @@ def _repo_relative_directory_for_changed_path(
     return _directory_for_changed_path(changed_path)
 
 
-def compute_directory_guides_to_refresh(changed_paths: list[str]) -> set[str]:
+def _select_directory_for_changed_path(
+    changed_path: PurePosixPath,
+    repo_root: Path | None = None,
+) -> PurePosixPath:
+    if repo_root is not None:
+        return _repo_relative_directory_for_changed_path(repo_root, changed_path)
+    if _looks_like_extensionless_file_path(changed_path) and changed_path.parent.parts:
+        return _directory_for_changed_path(changed_path.parent)
+    return _directory_for_changed_path(changed_path)
+
+def compute_directory_guides_to_refresh(
+    changed_paths: list[str],
+    repo_root: Path | None = None,
+) -> set[str]:
     guides: set[str] = set()
     for changed_path in changed_paths:
         normalized = _normalize_changed_path(changed_path)
         if normalized is None:
             continue
-        directory = _directory_for_changed_path(normalized)
+        directory = _select_directory_for_changed_path(
+            normalized,
+            repo_root=repo_root.resolve() if repo_root is not None else None,
+        )
         guide = directory / DIRECTORY_GUIDE_NAME
         guides.add(guide.as_posix() if guide.parts else DIRECTORY_GUIDE_NAME)
     return guides
@@ -113,14 +129,10 @@ def ensure_directory_guide(repo_root: Path, guide_path: Path) -> Path:
 
 
 def refresh_memory(repo_root: Path, changed_paths: list[str]) -> list[Path]:
-    guides: set[str] = set()
-    for changed_path in changed_paths:
-        normalized = _normalize_changed_path(changed_path)
-        if normalized is None:
-            continue
-        directory = _repo_relative_directory_for_changed_path(repo_root, normalized)
-        guide = directory / DIRECTORY_GUIDE_NAME
-        guides.add(guide.as_posix() if guide.parts else DIRECTORY_GUIDE_NAME)
+    guides = compute_directory_guides_to_refresh(
+        changed_paths,
+        repo_root=repo_root,
+    )
     return [
         ensure_directory_guide(repo_root, Path(guide_path))
         for guide_path in sorted(guides)
