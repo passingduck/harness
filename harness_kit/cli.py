@@ -1,11 +1,14 @@
 import argparse
+from pathlib import Path
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="harness-kit")
     sub = parser.add_subparsers(dest="command")
+    init_parser = sub.add_parser("init")
+    init_parser.add_argument("--target", required=True)
+    init_parser.add_argument("--project-name", required=True)
     for name in [
-        "init",
         "claim-task",
         "open-worktree",
         "close-worktree",
@@ -18,7 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     parser = build_parser()
-    parser.parse_args()
+    args = parser.parse_args()
+    if args.command == "init":
+        from harness_kit.scaffold import init_project
+
+        init_project(Path(args.target), args.project_name)
     return 0
 
 

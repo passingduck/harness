@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -257,6 +258,77 @@ class TemplatePresenceTest(unittest.TestCase):
             "`REQUIREMENT.md`",
         ]:
             self.assertIn(token, refresh_memory_text)
+
+
+class InitScaffoldTest(unittest.TestCase):
+    def test_init_creates_codex_first_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "sample-repo"
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "harness_kit.cli",
+                    "init",
+                    "--target",
+                    str(target),
+                    "--project-name",
+                    "sample-repo",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertTrue((target / "AGENTS.md").is_file())
+            self.assertTrue(
+                (target / "skills" / "orchestrate-queue" / "SKILL.md").is_file()
+            )
+            self.assertTrue((target / "docs" / "specs").is_dir())
+            self.assertTrue((target / "docs" / "plans").is_dir())
+            self.assertTrue((target / "docs" / "reviews").is_dir())
+            self.assertTrue(
+                (target / ".harness" / "policies" / "model-routing.yaml").is_file()
+            )
+            self.assertTrue(
+                (target / ".harness" / "runtime" / "queue" / "ready").is_dir()
+            )
+            self.assertTrue(
+                (target / ".harness" / "runtime" / "context-packs").is_dir()
+            )
+            self.assertTrue(
+                (target / ".harness" / "runtime" / "evidence" / "raw").is_dir()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / ".harness"
+                    / "runtime"
+                    / "review-packs"
+                    / "drafts"
+                ).is_dir()
+            )
+            self.assertTrue(
+                (target / ".harness" / "runtime" / "agent-runs").is_dir()
+            )
+            self.assertTrue(
+                (target / ".harness" / "runtime" / "worktree-registry").is_dir()
+            )
+            self.assertTrue((target / ".worktrees").is_dir())
+            self.assertTrue(
+                (target / ".harness" / "templates" / "directory.md").is_file()
+            )
+            self.assertTrue((target / "scripts" / "harness" / "run-qa.sh").is_file())
+            self.assertTrue(
+                (
+                    target
+                    / "scripts"
+                    / "harness"
+                    / "runtime"
+                    / "harness_kit"
+                    / "cli.py"
+                ).is_file()
+            )
 
         prepare_review_pack_text = Path(
             "skills/prepare-review-pack/SKILL.md"
