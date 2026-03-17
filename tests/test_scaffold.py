@@ -68,9 +68,10 @@ class TemplatePresenceTest(unittest.TestCase):
         review_stage_text = Path(
             "templates/project/.harness/policies/review-stages.yaml"
         ).read_text(encoding="utf-8")
-        self.assertIn("APPROVED", review_stage_text)
-        self.assertIn("CHANGES_REQUIRED", review_stage_text)
         for token in [
+            "APPROVED",
+            "CHANGES_REQUIRED",
+            "ESCALATE",
             "stage",
             "verdict",
             "blocking_issues",
@@ -86,7 +87,9 @@ class TemplatePresenceTest(unittest.TestCase):
         for token in [
             "why_this_task_exists",
             "owned_paths",
+            "required_reads",
             "disallowed_edits",
+            "constraints",
             "verification_commands",
             "expected_report_schema",
         ]:
@@ -95,14 +98,47 @@ class TemplatePresenceTest(unittest.TestCase):
         task_text = Path(
             "templates/project/.harness/templates/task.md"
         ).read_text(encoding="utf-8")
+        self.assertIn(
+            "The directory name is authoritative for queue state.",
+            task_text,
+        )
+        self.assertIn("Frontmatter `status` must mirror", task_text)
         for token in [
+            "id:",
+            "title:",
+            "status:",
+            "priority:",
+            "owner_role:",
+            "model_hint:",
+            "worktree:",
+            "parent_spec:",
+            "parent_plan:",
             "why_this_task_exists",
+            "owned_paths:",
+            "required_reads:",
+            "disallowed_edits:",
+            "docs_to_update:",
+            "constraints:",
+            "verification_commands:",
+            "expected_report_schema:",
+            "review_stages:",
+            "dependencies:",
+            "## task_text",
             "acceptance_criteria",
-            "expected_report_schema",
+            "## non_goals",
         ]:
             self.assertIn(token, task_text)
 
         pr_pack_text = Path(
             "templates/project/.harness/templates/pr-pack.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("verification evidence", pr_pack_text.lower())
+        for token in [
+            "## What Changed",
+            "## Why It Changed",
+            "## Intended Scope",
+            "## Major Risks",
+            "## Verification Evidence",
+            "## Documentation Updates",
+            "## Deferred Questions",
+        ]:
+            self.assertIn(token, pr_pack_text)
