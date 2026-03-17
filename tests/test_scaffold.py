@@ -1,9 +1,53 @@
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+
+
+TASK_TEXT = """---
+id: task-1
+title: Queue contract test
+status: ready
+priority: high
+owner_role: implementer
+model_hint: gpt-5.4
+worktree: null
+parent_spec: docs/specs/spec.md
+parent_plan: docs/plans/plan.md
+why_this_task_exists: Preserve queue determinism
+owned_paths:
+  - AGENTS.md
+required_reads:
+  - AGENTS.md
+disallowed_edits:
+  - infra/
+docs_to_update:
+  - docs/reviews/queue-test.md
+constraints:
+  - stay within phase 1 scope
+verification_commands:
+  - python3 -m unittest tests.test_scaffold -v
+expected_report_schema:
+  - Status
+  - Files changed
+review_stages:
+  - spec_scope
+dependencies: []
+---
+## task_text
+Exercise the generated scaffold end-to-end.
+
+## acceptance_criteria
+- context pack regenerated
+- worktree registry regenerated
+- review pack promoted
+
+## non_goals
+- no phase 2 adapter work
+"""
 
 
 class CliSmokeTest(unittest.TestCase):
@@ -368,3 +412,155 @@ class InitScaffoldTest(unittest.TestCase):
                 "build-review-pack",
             ]:
                 self.assertIn(token, runtime_help.stdout)
+
+    def test_generated_repo_runtime_scripts_survive_clone_like_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "demo"
+            init_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "harness_kit.cli",
+                    "init",
+                    "--target",
+                    str(target),
+                    "--project-name",
+                    "demo",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(init_proc.returncode, 0, init_proc.stderr)
+
+            required_paths = [
+                target / "AGENTS.md",
+                target / "skills" / "orchestrate-queue" / "SKILL.md",
+                target / ".harness" / "policies" / "model-routing.yaml",
+                target / ".harness" / "templates" / "directory.md",
+                target / ".harness" / "templates" / "evidence-pack.md",
+                target / "scripts" / "harness" / "open-worktree.sh",
+                target / "scripts" / "harness" / "run-qa.sh",
+                target / "scripts" / "harness" / "runtime" / "harness_kit" / "cli.py",
+                target / "docs" / "specs",
+                target / "docs" / "plans",
+                target / "docs" / "reviews",
+            ]
+            for path in required_paths:
+                if path.suffix:
+                    self.assertTrue(path.is_file(), path)
+                else:
+                    self.assertTrue(path.is_dir(), path)
+
+            task_path = target / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
+            task_path.parent.mkdir(parents=True, exist_ok=True)
+            task_path.write_text(TASK_TEXT, encoding="utf-8")
+
+            for rel_path in [
+                ".harness/runtime/context-packs",
+                ".harness/runtime/review-packs/drafts",
+                ".harness/runtime/worktree-registry",
+                ".worktrees",
+            ]:
+                shutil.rmtree(target / rel_path)
+
+            claim_proc = subprocess.run(
+                [
+                    "scripts/harness/claim-task.sh",
+                    "--repo-root",
+                    ".",
+                    "--task",
+                    ".harness/runtime/queue/ready/task-1.md",
+                ],
+                cwd=target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(claim_proc.returncode, 0, claim_proc.stderr)
+            context_packs_dir = target / ".harness" / "runtime" / "context-packs"
+            context_pack = context_packs_dir / "task-1.md"
+            self.assertTrue(context_packs_dir.is_dir())
+            self.assertTrue(context_pack.is_file())
+
+            open_proc = subprocess.run(
+                [
+                    "scripts/harness/open-worktree.sh",
+                    "--repo-root",
+                    ".",
+                    "--task-id",
+                    "task-1",
+                    "--branch",
+                    "task-1",
+                    "--cleanup-policy",
+                    "preserve",
+                ],
+                cwd=target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(open_proc.returncode, 0, open_proc.stderr)
+            registry_record = (
+                target / ".harness" / "runtime" / "worktree-registry" / "task-1.md"
+            )
+            self.assertTrue(registry_record.is_file())
+
+            close_proc = subprocess.run(
+                [
+                    "scripts/harness/close-worktree.sh",
+                    "--repo-root",
+                    ".",
+                    "--task-id",
+                    "task-1",
+                    "--mode",
+                    "preserve",
+                    "--worker-status",
+                    "DONE",
+                ],
+                cwd=target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(close_proc.returncode, 0, close_proc.stderr)
+            self.assertFalse(
+                (target / ".harness" / "runtime" / "queue" / "in_progress" / "task-1.md").exists()
+            )
+            self.assertTrue(
+                (target / ".harness" / "runtime" / "queue" / "review" / "task-1.md").is_file()
+            )
+
+            review_pack_proc = subprocess.run(
+                [
+                    "scripts/harness/build-review-pack.sh",
+                    "--repo-root",
+                    ".",
+                    "--type",
+                    "pr",
+                    "--title",
+                    "Queue test",
+                    "--changed-path",
+                    "AGENTS.md",
+                    "--verification-command",
+                    "true",
+                    "--promote-to",
+                    "docs/reviews/queue-test.md",
+                ],
+                cwd=target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(review_pack_proc.returncode, 0, review_pack_proc.stderr)
+            self.assertTrue(
+                (
+                    target
+                    / ".harness"
+                    / "runtime"
+                    / "review-packs"
+                    / "drafts"
+                    / "pr-queue-test.md"
+                ).is_file()
+            )
+            self.assertTrue((target / "docs" / "reviews" / "queue-test.md").is_file())
