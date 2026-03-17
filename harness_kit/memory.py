@@ -69,14 +69,15 @@ def _repo_relative_directory_for_changed_path(
         raise ValueError(f"changed path must stay within repo root: {changed_path.as_posix()}") from exc
     if resolved_path.exists() and resolved_path.is_file():
         return _directory_for_changed_path(changed_path.parent)
-    if (
-        _looks_like_extensionless_file_path(changed_path)
-        and changed_path.parent.parts
-        and (resolved_repo_root / Path(*changed_path.parent.parts)).is_dir()
-        and not resolved_path.exists()
-    ):
-        return _directory_for_changed_path(changed_path.parent)
-    return _directory_for_changed_path(changed_path)
+    if not _looks_like_extensionless_file_path(changed_path):
+        return _directory_for_changed_path(changed_path)
+    start_directory = _directory_for_changed_path(changed_path.parent)
+    directory = start_directory
+    while directory.parts:
+        if (resolved_repo_root / Path(*directory.parts)).is_dir():
+            return _directory_for_changed_path(directory)
+        directory = directory.parent
+    return PurePosixPath()
 
 
 def _select_directory_for_changed_path(

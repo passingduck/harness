@@ -185,6 +185,10 @@ class WorktreePathTest(unittest.TestCase):
                     branch_name="task-1",
                     cleanup_policy="preserve",
                 )
+            self.assertFalse((repo / ".worktrees").exists())
+            self.assertFalse(
+                (repo / ".harness" / "runtime" / "worktree-registry").exists()
+            )
 
     def test_close_worktree_maps_done_statuses_to_review(self) -> None:
         for worker_status in ["DONE", "DONE_WITH_CONCERNS"]:
@@ -212,6 +216,10 @@ class WorktreePathTest(unittest.TestCase):
                     self.assertIsNotNone(closed_task)
                     self.assertEqual(closed_task.parent.name, "review")
                     self.assertIn("status: preserved", record.read_text(encoding="utf-8"))
+                    self.assertIn(
+                        "worktree: null",
+                        closed_task.read_text(encoding="utf-8"),
+                    )
 
     def test_close_worktree_maps_needs_context_to_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

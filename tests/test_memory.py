@@ -153,6 +153,21 @@ class MemoryRefreshTest(unittest.TestCase):
             self.assertEqual(guides, [repo / "bin" / "DIRECTORY.md"])
             self.assertTrue(guides[0].is_file())
 
+    def test_refresh_memory_falls_back_to_nearest_surviving_guide_for_missing_extensionless_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            template = repo / ".harness" / "templates" / "directory.md"
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text("# Directory Guide\n", encoding="utf-8")
+
+            guides = refresh_memory(
+                repo_root=repo,
+                changed_paths=["bin/deploy"],
+            )
+
+            self.assertEqual(guides, [repo / "DIRECTORY.md"])
+            self.assertTrue(guides[0].is_file())
+
     def test_raises_when_directory_template_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

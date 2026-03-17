@@ -13,6 +13,7 @@ from harness_kit.queue import (
     find_task_path,
     load_task,
     move_task,
+    write_task,
 )
 
 
@@ -152,8 +153,8 @@ def open_worktree(
     worktree_name = task_id
     if worktree_name != task_id:
         raise ValueError("Phase 1 requires worktree_name == task_id.")
-    _ensure_worktree_roots(repo_root)
     _verify_worktrees_ignored(repo_root)
+    _ensure_worktree_roots(repo_root)
     worktree_path = choose_worktree_path(repo_root, task_id)
     _provision_worktree(repo_root, worktree_path, branch_name)
     baseline_verified = worktree_path.exists()
@@ -198,5 +199,9 @@ def close_worktree(
 
     moved_task: Path | None = None
     if task_path is not None:
+        task = load_task(task_path)
+        frontmatter = dict(task.frontmatter)
+        frontmatter["worktree"] = None
+        write_task(task_path, frontmatter, task.sections)
         moved_task = move_task(task_path, WORKER_STATUS_TO_QUEUE_STATE[worker_status])
     return moved_task, record_path

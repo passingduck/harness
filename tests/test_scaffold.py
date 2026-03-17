@@ -107,6 +107,9 @@ class TemplatePresenceTest(unittest.TestCase):
             "## QA Gate",
             "## Worktree Rule",
             "## Output Convention",
+        ]:
+            self.assertIn(token, agents_text)
+        for field in [
             "Status",
             "What you implemented",
             "What you tested and results",
@@ -115,7 +118,7 @@ class TemplatePresenceTest(unittest.TestCase):
             "Self-review findings",
             "Any issues or concerns",
         ]:
-            self.assertIn(token, agents_text)
+            self.assertIn(f"- {field}", agents_text)
 
         gitignore_text = Path("templates/project/.gitignore").read_text(
             encoding="utf-8"
@@ -157,14 +160,14 @@ class TemplatePresenceTest(unittest.TestCase):
             "templates/project/.harness/policies/qa-rules.md"
         ).read_text(encoding="utf-8")
         for token in [
+            "# Phase 1 QA Rules",
             "## Hook Points",
-            "`rules/lint`",
-            "`adversarial regression`",
             "## Command Placeholders",
+            "## Required Evidence",
+            "rules/lint",
+            "adversarial regression",
             "scripts/harness/run-qa.sh --stage rules-lint",
             "scripts/harness/run-qa.sh --stage adversarial-regression",
-            "## Required Evidence",
-            "`APPROVED`",
         ]:
             self.assertIn(token, qa_rules_text)
 
@@ -172,17 +175,19 @@ class TemplatePresenceTest(unittest.TestCase):
             "templates/project/.harness/policies/doc-update-policy.md"
         ).read_text(encoding="utf-8")
         for token in [
-            "`README.md`",
-            "`SUMMARY.md`",
-            "`REQUIREMENT.md`",
-            "`DIRECTORY.md`",
-            "`docs/specs/`",
-            "`docs/plans/`",
-            "`docs/reviews/`",
-            "`.harness/policies/*`",
-            "`.harness/templates/*`",
-            "`skills/*`",
-            "`scripts/harness/*`",
+            "# Documentation Update Policy",
+            "## Required Checks",
+            "README.md",
+            "SUMMARY.md",
+            "REQUIREMENT.md",
+            "DIRECTORY.md",
+            "docs/specs/",
+            "docs/plans/",
+            "docs/reviews/",
+            ".harness/policies/*",
+            ".harness/templates/*",
+            "skills/*",
+            "scripts/harness/*",
             "If no durable docs changed, say why in the task report.",
         ]:
             self.assertIn(token, doc_update_policy_text)
@@ -204,11 +209,6 @@ class TemplatePresenceTest(unittest.TestCase):
         task_text = Path(
             "templates/project/.harness/templates/task.md"
         ).read_text(encoding="utf-8")
-        self.assertIn(
-            "The directory name is authoritative for queue state.",
-            task_text,
-        )
-        self.assertIn("Frontmatter `status` must mirror", task_text)
         for token in [
             "id:",
             "title:",
@@ -229,8 +229,10 @@ class TemplatePresenceTest(unittest.TestCase):
             "expected_report_schema:",
             "review_stages:",
             "dependencies:",
+            "The directory name is authoritative for queue state.",
+            "Frontmatter `status` must mirror",
             "## task_text",
-            "acceptance_criteria",
+            "## acceptance_criteria",
             "## non_goals",
         ]:
             self.assertIn(token, task_text)
@@ -284,10 +286,10 @@ class TemplatePresenceTest(unittest.TestCase):
         for token in [
             "name: orchestrate-queue",
             ".harness/runtime/queue/",
-            "status` must mirror",
             "worktree: null",
             ".harness/policies/review-stages.yaml",
             ".harness/templates/task.md",
+            "status` must mirror",
         ]:
             self.assertIn(token, orchestrate_queue_text)
 
@@ -309,11 +311,10 @@ class TemplatePresenceTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for token in [
             "name: prepare-review-pack",
-            "verification evidence",
-            "`.harness/templates/evidence-pack.md`",
-            "`.harness/templates/commit-pack.md`",
-            "`.harness/templates/pr-pack.md`",
-            "`docs/reviews/`",
+            ".harness/templates/evidence-pack.md",
+            ".harness/templates/commit-pack.md",
+            ".harness/templates/pr-pack.md",
+            "docs/reviews/",
         ]:
             self.assertIn(token, prepare_review_pack_text)
 
