@@ -113,6 +113,41 @@ class MemoryRefreshTest(unittest.TestCase):
             self.assertEqual(guides, [repo / "bin" / "DIRECTORY.md"])
             self.assertTrue(guides[0].is_file())
 
+    def test_refresh_memory_maps_missing_extensionless_path_to_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            template = repo / ".harness" / "templates" / "directory.md"
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text("# Directory Guide\n", encoding="utf-8")
+            (repo / "bin").mkdir(parents=True, exist_ok=True)
+
+            guides = refresh_memory(
+                repo_root=repo,
+                changed_paths=["bin/deploy"],
+            )
+
+            self.assertEqual(guides, [repo / "bin" / "DIRECTORY.md"])
+            self.assertTrue(guides[0].is_file())
+
+    def test_refresh_memory_maps_deleted_extensionless_path_to_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            template = repo / ".harness" / "templates" / "directory.md"
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text("# Directory Guide\n", encoding="utf-8")
+            deploy_script = repo / "bin" / "deploy"
+            deploy_script.parent.mkdir(parents=True, exist_ok=True)
+            deploy_script.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+            deploy_script.unlink()
+
+            guides = refresh_memory(
+                repo_root=repo,
+                changed_paths=["bin/deploy"],
+            )
+
+            self.assertEqual(guides, [repo / "bin" / "DIRECTORY.md"])
+            self.assertTrue(guides[0].is_file())
+
     def test_raises_when_directory_template_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
