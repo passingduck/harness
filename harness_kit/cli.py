@@ -14,24 +14,78 @@ def build_parser() -> argparse.ArgumentParser:
         init_parser = sub.add_parser("init")
         init_parser.add_argument("--target", required=True)
         init_parser.add_argument("--project-name", required=True)
-    for name in [
-        "claim-task",
-        "open-worktree",
-        "close-worktree",
-        "refresh-memory",
-        "build-review-pack",
-    ]:
-        sub.add_parser(name)
+    claim_parser = sub.add_parser("claim-task")
+    claim_parser.add_argument("--repo-root", required=True)
+    claim_parser.add_argument("--task", required=True)
+
+    open_parser = sub.add_parser("open-worktree")
+    open_parser.add_argument("--repo-root", required=True)
+    open_parser.add_argument("--task-id", required=True)
+    open_parser.add_argument("--branch", required=True)
+    open_parser.add_argument(
+        "--cleanup-policy",
+        choices=["preserve", "delete"],
+        default="preserve",
+    )
+
+    close_parser = sub.add_parser("close-worktree")
+    close_parser.add_argument("--repo-root", required=True)
+    close_parser.add_argument("--task-id", required=True)
+    close_parser.add_argument("--mode", required=True, choices=["preserve", "delete"])
+    close_parser.add_argument(
+        "--worker-status",
+        required=True,
+        choices=["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
+    )
+
+    sub.add_parser("refresh-memory")
+    sub.add_parser("build-review-pack")
     return parser
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    repo_root = Path(getattr(args, "repo_root", "."))
     if args.command == "init":
         from harness_kit.scaffold import init_project
 
         init_project(Path(args.target), args.project_name)
+    elif args.command == "claim-task":
+        from harness_kit.queue import claim_task
+
+        task_path = Path(args.task)
+        if not task_path.is_absolute():
+            task_path = repo_root / task_path
+        claimed_task, context_pack = claim_task(
+            task_path=task_path,
+            repo_root=repo_root,
+        )
+        print(claimed_task)
+        print(context_pack)
+    elif args.command == "open-worktree":
+        from harness_kit.worktree import open_worktree
+
+        print(
+            open_worktree(
+                repo_root=repo_root,
+                task_id=args.task_id,
+                branch_name=args.branch,
+                cleanup_policy=args.cleanup_policy,
+            )
+        )
+    elif args.command == "close-worktree":
+        from harness_kit.worktree import close_worktree
+
+        moved_task, record = close_worktree(
+            repo_root=repo_root,
+            task_id=args.task_id,
+            mode=args.mode,
+            worker_status=args.worker_status,
+        )
+        if moved_task is not None:
+            print(moved_task)
+        print(record)
     return 0
 
 

@@ -5,6 +5,8 @@ RUNTIME_BUNDLE_ROOT = Path("scripts/harness/runtime/harness_kit")
 VENDORED_RUNTIME_MODULES = [
     Path("__init__.py"),
     Path("cli.py"),
+    Path("queue.py"),
+    Path("worktree.py"),
 ]
 
 
