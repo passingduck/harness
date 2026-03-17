@@ -48,4 +48,12 @@ Tasks that need isolated write access must use `.worktrees/<task-id>`. In phase 
 
 ## Output Convention
 
-Report with: status, what changed, verification results, files changed, self-review findings, and open concerns.
+Use the canonical expected report schema:
+
+- Status
+- What you implemented
+- What you tested and results
+- Files changed
+- Commit SHA
+- Self-review findings
+- Any issues or concerns

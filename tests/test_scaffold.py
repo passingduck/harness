@@ -51,6 +51,32 @@ class TemplatePresenceTest(unittest.TestCase):
         for rel in required:
             self.assertTrue(Path(rel).is_file(), rel)
 
+        agents_text = Path("templates/project/AGENTS.md").read_text(encoding="utf-8")
+        for token in [
+            "## Instruction Priority",
+            "## Required Reads",
+            "## Default Workflow",
+            "## Model Routing Default",
+            "## Documentation Gate",
+            "## QA Gate",
+            "## Worktree Rule",
+            "## Output Convention",
+            "Status",
+            "What you implemented",
+            "What you tested and results",
+            "Files changed",
+            "Commit SHA",
+            "Self-review findings",
+            "Any issues or concerns",
+        ]:
+            self.assertIn(token, agents_text)
+
+        gitignore_text = Path("templates/project/.gitignore").read_text(
+            encoding="utf-8"
+        )
+        for token in [".harness/runtime/", ".worktrees/", ".superpowers/"]:
+            self.assertIn(token, gitignore_text)
+
         model_routing_text = Path(
             "templates/project/.harness/policies/model-routing.yaml"
         ).read_text(encoding="utf-8")
@@ -80,6 +106,40 @@ class TemplatePresenceTest(unittest.TestCase):
             "next_action",
         ]:
             self.assertIn(token, review_stage_text)
+
+        qa_rules_text = Path(
+            "templates/project/.harness/policies/qa-rules.md"
+        ).read_text(encoding="utf-8")
+        for token in [
+            "## Hook Points",
+            "`rules/lint`",
+            "`adversarial regression`",
+            "## Command Placeholders",
+            "scripts/harness/run-qa.sh --stage rules-lint",
+            "scripts/harness/run-qa.sh --stage adversarial-regression",
+            "## Required Evidence",
+            "`APPROVED`",
+        ]:
+            self.assertIn(token, qa_rules_text)
+
+        doc_update_policy_text = Path(
+            "templates/project/.harness/policies/doc-update-policy.md"
+        ).read_text(encoding="utf-8")
+        for token in [
+            "`README.md`",
+            "`SUMMARY.md`",
+            "`REQUIREMENT.md`",
+            "`DIRECTORY.md`",
+            "`docs/specs/`",
+            "`docs/plans/`",
+            "`docs/reviews/`",
+            "`.harness/policies/*`",
+            "`.harness/templates/*`",
+            "`skills/*`",
+            "`scripts/harness/*`",
+            "If no durable docs changed, say why in the task report.",
+        ]:
+            self.assertIn(token, doc_update_policy_text)
 
         context_pack_text = Path(
             "templates/project/.harness/templates/context-pack.md"
@@ -142,3 +202,71 @@ class TemplatePresenceTest(unittest.TestCase):
             "## Deferred Questions",
         ]:
             self.assertIn(token, pr_pack_text)
+
+        evidence_pack_text = Path(
+            "templates/project/.harness/templates/evidence-pack.md"
+        ).read_text(encoding="utf-8")
+        for token in [
+            "## Claim Being Justified",
+            "## Commands Run",
+            "## Exit Codes",
+            "## Key Output",
+            "## Files Verified",
+            "## Regression Checks",
+            "## Related Artifacts",
+            "## Reviewer Notes",
+        ]:
+            self.assertIn(token, evidence_pack_text)
+
+        commit_pack_text = Path(
+            "templates/project/.harness/templates/commit-pack.md"
+        ).read_text(encoding="utf-8")
+        for token in [
+            "## What Changed",
+            "## Why It Changed",
+            "## Intended Scope",
+            "## Major Risks",
+            "## Verification Evidence",
+            "## Documentation Updates",
+            "## Deferred Questions",
+        ]:
+            self.assertIn(token, commit_pack_text)
+
+        orchestrate_queue_text = Path("skills/orchestrate-queue/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in [
+            "name: orchestrate-queue",
+            ".harness/runtime/queue/",
+            "status` must mirror",
+            "worktree: null",
+            ".harness/policies/review-stages.yaml",
+            ".harness/templates/task.md",
+        ]:
+            self.assertIn(token, orchestrate_queue_text)
+
+        refresh_memory_text = Path("skills/refresh-memory/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in [
+            "name: refresh-memory",
+            "`SUMMARY.md`",
+            "`DIRECTORY.md`",
+            "`.harness/templates/directory.md`",
+            "`README.md`",
+            "`REQUIREMENT.md`",
+        ]:
+            self.assertIn(token, refresh_memory_text)
+
+        prepare_review_pack_text = Path(
+            "skills/prepare-review-pack/SKILL.md"
+        ).read_text(encoding="utf-8")
+        for token in [
+            "name: prepare-review-pack",
+            "verification evidence",
+            "`.harness/templates/evidence-pack.md`",
+            "`.harness/templates/commit-pack.md`",
+            "`.harness/templates/pr-pack.md`",
+            "`docs/reviews/`",
+        ]:
+            self.assertIn(token, prepare_review_pack_text)
