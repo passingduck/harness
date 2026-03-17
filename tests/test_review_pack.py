@@ -112,6 +112,24 @@ class ReviewPackTest(unittest.TestCase):
                     promote_to=Path("notes/queue-state-fix.md"),
                 )
 
+    def test_promotion_rejects_normalized_path_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._write_templates(repo)
+            draft = build_pr_review_pack(
+                repo_root=repo,
+                title="Queue state fix",
+                changed_paths=["AGENTS.md"],
+                verification_commands=["true"],
+            )
+
+            with self.assertRaises(ValueError):
+                promote_review_pack(
+                    repo_root=repo,
+                    draft_path=draft,
+                    promote_to=Path("docs/reviews/../escaped.md"),
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

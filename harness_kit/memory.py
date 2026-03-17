@@ -47,6 +47,20 @@ def _directory_for_changed_path(changed_path: PurePosixPath) -> PurePosixPath:
     return directory
 
 
+def _repo_relative_directory_for_changed_path(
+    repo_root: Path,
+    changed_path: PurePosixPath,
+) -> PurePosixPath:
+    resolved_path = (repo_root.resolve() / Path(*changed_path.parts)).resolve()
+    try:
+        resolved_path.relative_to(repo_root.resolve())
+    except ValueError as exc:
+        raise ValueError(f"changed path must stay within repo root: {changed_path.as_posix()}") from exc
+    if resolved_path.exists() and resolved_path.is_file():
+        return _directory_for_changed_path(changed_path.parent)
+    return _directory_for_changed_path(changed_path)
+
+
 def compute_directory_guides_to_refresh(changed_paths: list[str]) -> set[str]:
     guides: set[str] = set()
     for changed_path in changed_paths:
@@ -81,7 +95,14 @@ def ensure_directory_guide(repo_root: Path, guide_path: Path) -> Path:
 
 
 def refresh_memory(repo_root: Path, changed_paths: list[str]) -> list[Path]:
-    guides = compute_directory_guides_to_refresh(changed_paths)
+    guides: set[str] = set()
+    for changed_path in changed_paths:
+        normalized = _normalize_changed_path(changed_path)
+        if normalized is None:
+            continue
+        directory = _repo_relative_directory_for_changed_path(repo_root, normalized)
+        guide = directory / DIRECTORY_GUIDE_NAME
+        guides.add(guide.as_posix() if guide.parts else DIRECTORY_GUIDE_NAME)
     return [
         ensure_directory_guide(repo_root, Path(guide_path))
         for guide_path in sorted(guides)

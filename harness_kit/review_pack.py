@@ -107,10 +107,13 @@ def build_pr_review_pack(
 
 
 def promote_review_pack(repo_root: Path, draft_path: Path, promote_to: Path) -> Path:
-    if promote_to.parts[:2] != REVIEW_DOCS_ROOT.parts:
-        raise ValueError("promoted review packs must stay under docs/reviews")
+    review_docs_root = (repo_root.resolve() / REVIEW_DOCS_ROOT).resolve()
     source_path = _resolve_repo_relative_path(repo_root, draft_path)
     target_path = _resolve_repo_relative_path(repo_root, promote_to)
+    try:
+        target_path.relative_to(review_docs_root)
+    except ValueError as exc:
+        raise ValueError("promoted review packs must stay under docs/reviews") from exc
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
     return target_path
