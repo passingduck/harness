@@ -96,6 +96,7 @@ class TemplatePresenceTest(unittest.TestCase):
             "templates/project/scripts/harness/write-review-result.sh",
             "templates/project/scripts/harness/finish-worktree.sh",
             "templates/project/scripts/harness/publish-pr.sh",
+            "skills/merge-worktree/SKILL.md",
             "skills/orchestrate-queue/SKILL.md",
             "skills/refresh-memory/SKILL.md",
             "skills/prepare-review-pack/SKILL.md",
@@ -113,6 +114,9 @@ class TemplatePresenceTest(unittest.TestCase):
             "## QA Gate",
             "## Worktree Rule",
             "## Output Convention",
+            "review-result receipts",
+            "`finish-worktree`",
+            "`publish-pr`",
         ]:
             self.assertIn(token, agents_text)
         for field in [
@@ -254,8 +258,48 @@ class TemplatePresenceTest(unittest.TestCase):
             "## Verification Evidence",
             "## Documentation Updates",
             "## Deferred Questions",
+            "task-linked",
         ]:
             self.assertIn(token, pr_pack_text)
+
+        readme_text = Path("templates/project/README.md").read_text(encoding="utf-8")
+        for token in [
+            "`scripts/harness/write-review-result.sh`",
+            "`scripts/harness/finish-worktree.sh`",
+            "`scripts/harness/publish-pr.sh`",
+            "`third_party/harness-source.txt`",
+        ]:
+            self.assertIn(token, readme_text)
+
+        summary_text = Path("templates/project/SUMMARY.md").read_text(encoding="utf-8")
+        for token in [
+            "`write-review-result`",
+            "`finish-worktree`",
+            "`publish-pr`",
+            "`third_party/harness-source.txt`",
+        ]:
+            self.assertIn(token, summary_text)
+
+        requirement_text = Path("templates/project/REQUIREMENT.md").read_text(
+            encoding="utf-8"
+        )
+        for token in [
+            "`gh`",
+            "`third_party/harness-source.txt`",
+            "vendored runtime files",
+        ]:
+            self.assertIn(token, requirement_text)
+
+        merge_worktree_text = Path("skills/merge-worktree/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in [
+            "name: merge-worktree",
+            "review-result",
+            "`publish-pr`",
+            "`finish-worktree`",
+        ]:
+            self.assertIn(token, merge_worktree_text)
 
         evidence_pack_text = Path(
             "templates/project/.harness/templates/evidence-pack.md"

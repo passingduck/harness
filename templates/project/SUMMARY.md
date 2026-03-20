@@ -13,6 +13,10 @@ Summarize major components, data flows, and operational assumptions.
 - implementation flow
 - review flow
 - release or deploy flow
+- `write-review-result` records stage receipts under `.harness/runtime/review-results/`
+- `finish-worktree` lands a review-state task locally and finalizes queue and registry state
+- `publish-pr` is optional and only for GitHub publication while the task remains in `review`
+- `third_party/harness-source.txt` records the last harness scaffold or sync provenance
 
 ## Known Risks
 

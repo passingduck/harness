@@ -26,7 +26,10 @@ Keep this repository markdown-first, repo-native, and deterministic for task exe
 3. Make the smallest correct change.
 4. Refresh required documentation.
 5. Run verification and collect evidence.
-6. Prepare review output with the required report schema.
+6. Write required review-result receipts before any finish claim.
+7. Use `publish-pr` only if GitHub publication is needed while the task is still in `review`.
+8. Use `finish-worktree` exactly once after review receipts and the task-linked PR narrative are ready.
+9. Prepare review output with the required report schema.
 
 ## Model Routing Default
 
@@ -42,9 +45,13 @@ Work is not complete until required updates to `README.md`, `SUMMARY.md`, `REQUI
 
 No completion claim, QA pass, or review-ready claim is valid without fresh verification evidence and required review stages.
 
+`finish-worktree` is blocked until the required review-result receipts exist and the task-linked PR review narrative is available.
+
 ## Worktree Rule
 
 Tasks that need isolated write access must use `.worktrees/<task-id>`. In phase 1, `worktree_name == task_id`.
+
+`publish-pr` is optional and GitHub-specific. `finish-worktree` is the required local landing path once review is complete.
 
 ## Output Convention
 

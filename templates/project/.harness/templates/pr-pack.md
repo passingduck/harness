@@ -1,5 +1,7 @@
 # PR Review Pack
 
+This document is the task-linked review narrative used by `publish-pr` and `finish-worktree`.
+
 ## What Changed
 
 Summarize the user-visible and system-visible changes.
