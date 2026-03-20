@@ -27,6 +27,8 @@ WORKTREE_REGISTRY_FIELDS = [
     "status",
     "baseline_verified",
     "cleanup_policy",
+    "draft_pr_review_pack",
+    "promoted_review_pack",
 ]
 WORKER_STATUS_TO_QUEUE_STATE = {
     "DONE": "review",
@@ -125,6 +127,34 @@ def _write_registry_record(record_path: Path, record: dict[str, Any]) -> None:
     record_path.parent.mkdir(parents=True, exist_ok=True)
     frontmatter_text = _render_frontmatter(record, WORKTREE_REGISTRY_FIELDS)
     record_path.write_text(f"{frontmatter_text}\n", encoding="utf-8")
+
+
+def _repo_relative_registry_path(repo_root: Path, path: Path | str) -> str:
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = repo_root / candidate
+    resolved = candidate.resolve(strict=False)
+    relative = resolved.relative_to(repo_root.resolve())
+    return str(relative)
+
+
+def record_review_pack_path(
+    repo_root: Path,
+    task_id: str,
+    *,
+    draft_path: Path | str | None = None,
+    promoted_path: Path | str | None = None,
+) -> Path | None:
+    record_path = _registry_record_path(repo_root, task_id)
+    if not record_path.is_file():
+        return None
+    record = _read_registry_record(record_path)
+    if draft_path is not None:
+        record["draft_pr_review_pack"] = _repo_relative_registry_path(repo_root, draft_path)
+    if promoted_path is not None:
+        record["promoted_review_pack"] = _repo_relative_registry_path(repo_root, promoted_path)
+    _write_registry_record(record_path, record)
+    return record_path
 
 
 def _resolve_registry_worktree_path(repo_root: Path, task_id: str, raw_path: str) -> Path:

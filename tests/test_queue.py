@@ -32,8 +32,8 @@ expected_report_schema:
   - Status
   - Files changed
 review_stages:
-  - spec_scope
-  - rules_lint
+  - spec_scope_review
+  - rules_lint_review
 dependencies: []
 ---
 ## task_text

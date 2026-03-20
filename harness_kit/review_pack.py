@@ -1,6 +1,9 @@
 import re
 from pathlib import Path
 
+from harness_kit.queue import validate_phase1_task_id
+from harness_kit.worktree import record_review_pack_path
+
 
 RUNTIME_DRAFTS_PATH = Path(".harness/runtime/review-packs/drafts")
 REVIEW_DOCS_ROOT = Path("docs/reviews")
@@ -64,15 +67,23 @@ def build_review_pack(
     title: str,
     changed_paths: list[str],
     verification_commands: list[str],
+    task_id: str | None = None,
 ) -> Path:
     template = _load_template(repo_root, review_type)
-    draft_name = f"{review_type}-{_slugify_title(title)}.md"
+    if task_id is not None and review_type != "pr":
+        raise ValueError("task-linked review pack paths are only supported for PR review packs")
+    if review_type == "pr" and task_id is not None:
+        draft_name = f"{validate_phase1_task_id(task_id)}-pr.md"
+    else:
+        draft_name = f"{review_type}-{_slugify_title(title)}.md"
     draft_path = _resolve_repo_relative_path(repo_root, RUNTIME_DRAFTS_PATH / draft_name)
     draft_path.parent.mkdir(parents=True, exist_ok=True)
     draft_path.write_text(
         _render_review_pack(template, title, changed_paths, verification_commands),
         encoding="utf-8",
     )
+    if review_type == "pr" and task_id is not None:
+        record_review_pack_path(repo_root, task_id, draft_path=draft_path)
     return draft_path
 
 
@@ -96,6 +107,7 @@ def build_pr_review_pack(
     title: str,
     changed_paths: list[str],
     verification_commands: list[str],
+    task_id: str | None = None,
 ) -> Path:
     return build_review_pack(
         repo_root=repo_root,
@@ -103,10 +115,16 @@ def build_pr_review_pack(
         title=title,
         changed_paths=changed_paths,
         verification_commands=verification_commands,
+        task_id=task_id,
     )
 
 
-def promote_review_pack(repo_root: Path, draft_path: Path, promote_to: Path) -> Path:
+def promote_review_pack(
+    repo_root: Path,
+    draft_path: Path,
+    promote_to: Path,
+    task_id: str | None = None,
+) -> Path:
     review_docs_root = (repo_root.resolve() / REVIEW_DOCS_ROOT).resolve()
     source_path = _resolve_repo_relative_path(repo_root, draft_path)
     target_path = _resolve_repo_relative_path(repo_root, promote_to)
@@ -116,4 +134,6 @@ def promote_review_pack(repo_root: Path, draft_path: Path, promote_to: Path) -> 
         raise ValueError("promoted review packs must stay under docs/reviews") from exc
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+    if task_id is not None:
+        record_review_pack_path(repo_root, task_id, promoted_path=target_path)
     return target_path

@@ -47,6 +47,35 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    review_result_parser = sub.add_parser("write-review-result")
+    review_result_parser.add_argument("--repo-root", required=True)
+    review_result_parser.add_argument("--task-id", required=True)
+    review_result_parser.add_argument("--stage", required=True)
+    review_result_parser.add_argument(
+        "--verdict",
+        required=True,
+        choices=["APPROVED", "CHANGES_REQUIRED", "ESCALATE"],
+    )
+    review_result_parser.add_argument(
+        "--blocking-issue",
+        dest="blocking_issues",
+        action="append",
+        default=[],
+    )
+    review_result_parser.add_argument(
+        "--advisory-note",
+        dest="advisory_notes",
+        action="append",
+        default=[],
+    )
+    review_result_parser.add_argument(
+        "--evidence-ref",
+        dest="evidence_refs",
+        action="append",
+        default=[],
+    )
+    review_result_parser.add_argument("--next-action", required=True)
+
     review_pack_parser = sub.add_parser("build-review-pack")
     review_pack_parser.add_argument("--repo-root", required=True)
     review_pack_parser.add_argument(
@@ -55,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["commit", "pr"],
         required=True,
     )
+    review_pack_parser.add_argument("--task-id")
     review_pack_parser.add_argument("--title", required=True)
     review_pack_parser.add_argument(
         "--changed-path",
@@ -123,6 +153,21 @@ def main() -> int:
             changed_paths=args.changed_paths,
         ):
             print(guide)
+    elif args.command == "write-review-result":
+        from harness_kit.review_results import write_review_result
+
+        print(
+            write_review_result(
+                repo_root=repo_root,
+                task_id=args.task_id,
+                stage=args.stage,
+                verdict=args.verdict,
+                blocking_issues=args.blocking_issues,
+                advisory_notes=args.advisory_notes,
+                evidence_refs=args.evidence_refs,
+                next_action=args.next_action,
+            )
+        )
     elif args.command == "build-review-pack":
         from harness_kit.review_pack import build_review_pack, promote_review_pack
 
@@ -132,6 +177,7 @@ def main() -> int:
             title=args.title,
             changed_paths=args.changed_paths,
             verification_commands=args.verification_commands,
+            task_id=args.task_id,
         )
         print(draft)
         if args.promote_to:
@@ -140,6 +186,7 @@ def main() -> int:
                     repo_root=repo_root,
                     draft_path=draft.relative_to(repo_root),
                     promote_to=Path(args.promote_to),
+                    task_id=args.task_id,
                 )
             )
     return 0

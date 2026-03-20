@@ -34,7 +34,7 @@ expected_report_schema:
   - Status
   - Files changed
 review_stages:
-  - spec_scope
+  - spec_scope_review
 dependencies: []
 ---
 ## task_text
@@ -65,6 +65,7 @@ class CliSmokeTest(unittest.TestCase):
             "open-worktree",
             "close-worktree",
             "refresh-memory",
+            "write-review-result",
             "build-review-pack",
         ]:
             self.assertIn(token, proc.stdout)
@@ -90,6 +91,7 @@ class TemplatePresenceTest(unittest.TestCase):
             "templates/project/.harness/templates/commit-pack.md",
             "templates/project/.harness/templates/pr-pack.md",
             "templates/project/scripts/harness/run-qa.sh",
+            "templates/project/scripts/harness/write-review-result.sh",
             "skills/orchestrate-queue/SKILL.md",
             "skills/refresh-memory/SKILL.md",
             "skills/prepare-review-pack/SKILL.md",
@@ -363,6 +365,14 @@ class InitScaffoldTest(unittest.TestCase):
                     target
                     / ".harness"
                     / "runtime"
+                    / "review-results"
+                ).is_dir()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / ".harness"
+                    / "runtime"
                     / "review-packs"
                     / "drafts"
                 ).is_dir()
@@ -380,6 +390,11 @@ class InitScaffoldTest(unittest.TestCase):
             run_qa_path = target / "scripts" / "harness" / "run-qa.sh"
             self.assertTrue(run_qa_path.is_file())
             self.assertTrue(os.access(run_qa_path, os.X_OK))
+            write_review_result_path = (
+                target / "scripts" / "harness" / "write-review-result.sh"
+            )
+            self.assertTrue(write_review_result_path.is_file())
+            self.assertTrue(os.access(write_review_result_path, os.X_OK))
             self.assertTrue(
                 (
                     target
@@ -388,6 +403,16 @@ class InitScaffoldTest(unittest.TestCase):
                     / "runtime"
                     / "harness_kit"
                     / "cli.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / "scripts"
+                    / "harness"
+                    / "runtime"
+                    / "harness_kit"
+                    / "review_results.py"
                 ).is_file()
             )
 
@@ -410,6 +435,7 @@ class InitScaffoldTest(unittest.TestCase):
                 "open-worktree",
                 "close-worktree",
                 "refresh-memory",
+                "write-review-result",
                 "build-review-pack",
             ]:
                 self.assertIn(token, runtime_help.stdout)
@@ -442,7 +468,14 @@ class InitScaffoldTest(unittest.TestCase):
                 target / ".harness" / "templates" / "evidence-pack.md",
                 target / "scripts" / "harness" / "open-worktree.sh",
                 target / "scripts" / "harness" / "run-qa.sh",
+                target / "scripts" / "harness" / "write-review-result.sh",
                 target / "scripts" / "harness" / "runtime" / "harness_kit" / "cli.py",
+                target
+                / "scripts"
+                / "harness"
+                / "runtime"
+                / "harness_kit"
+                / "review_results.py",
                 target / "docs" / "specs",
                 target / "docs" / "plans",
                 target / "docs" / "reviews",
@@ -459,6 +492,7 @@ class InitScaffoldTest(unittest.TestCase):
 
             for rel_path in [
                 ".harness/runtime/context-packs",
+                ".harness/runtime/review-results",
                 ".harness/runtime/review-packs/drafts",
                 ".harness/runtime/worktree-registry",
                 ".worktrees",
@@ -539,6 +573,8 @@ class InitScaffoldTest(unittest.TestCase):
                     ".",
                     "--type",
                     "pr",
+                    "--task-id",
+                    "task-1",
                     "--title",
                     "Queue test",
                     "--changed-path",
@@ -561,10 +597,51 @@ class InitScaffoldTest(unittest.TestCase):
                     / "runtime"
                     / "review-packs"
                     / "drafts"
-                    / "pr-queue-test.md"
+                    / "task-1-pr.md"
                 ).is_file()
             )
             self.assertTrue((target / "docs" / "reviews" / "queue-test.md").is_file())
+            self.assertIn(
+                "draft_pr_review_pack: .harness/runtime/review-packs/drafts/task-1-pr.md",
+                registry_record.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "promoted_review_pack: docs/reviews/queue-test.md",
+                registry_record.read_text(encoding="utf-8"),
+            )
+
+            review_result_proc = subprocess.run(
+                [
+                    "scripts/harness/write-review-result.sh",
+                    "--repo-root",
+                    ".",
+                    "--task-id",
+                    "task-1",
+                    "--stage",
+                    "spec_scope_review",
+                    "--verdict",
+                    "APPROVED",
+                    "--next-action",
+                    "finish",
+                    "--evidence-ref",
+                    "docs/reviews/queue-test.md",
+                ],
+                cwd=target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(review_result_proc.returncode, 0, review_result_proc.stderr)
+            self.assertTrue(
+                (
+                    target
+                    / ".harness"
+                    / "runtime"
+                    / "review-results"
+                    / "task-1"
+                    / "spec_scope_review.md"
+                ).is_file()
+            )
 
     def test_init_refuses_non_empty_target_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
