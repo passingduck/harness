@@ -98,10 +98,7 @@ def validate_review_results(
     task_id: str,
     required_stages: list[str],
 ) -> list[dict[str, Any]]:
-    try:
-        receipts = [load_review_result(repo_root, task_id, stage) for stage in required_stages]
-    except FileNotFoundError as exc:
-        raise ValueError(f"Missing required review result receipt: {exc.filename}") from exc
+    receipts = [load_review_result(repo_root, task_id, stage) for stage in required_stages]
     unapproved = [receipt["stage"] for receipt in receipts if receipt["verdict"] != "APPROVED"]
     if unapproved:
         raise ValueError(

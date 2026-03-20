@@ -147,7 +147,10 @@ def finish_worktree(
     if existing_target not in (None, "", target_branch):
         raise ValueError("finish-worktree target branch must match registry.target_branch.")
 
-    validate_review_results(repo_root, task_id, list(task.frontmatter["review_stages"]))
+    try:
+        validate_review_results(repo_root, task_id, list(task.frontmatter["review_stages"]))
+    except FileNotFoundError as exc:
+        raise ValueError(f"Missing required review result receipt: {exc.filename}") from exc
     _ensure_docs_updated(
         repo_root,
         target_branch,
