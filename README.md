@@ -7,7 +7,8 @@
 - `python3 -m harness_kit.cli init` to scaffold a new harness-enabled repository
 - canonical project templates under `templates/project/`
 - vendored runtime modules copied into generated repos under `scripts/harness/runtime/harness_kit/`
-- phase-1 commands for `claim-task`, `open-worktree`, `close-worktree`, `refresh-memory`, and `build-review-pack`
+- phase-1 commands for `claim-task`, `open-worktree`, `close-worktree`, `finish-worktree`, `publish-pr`, `refresh-memory`, and `build-review-pack`
+- deterministic source-to-generated sync via `python3 -m harness_kit.cli sync-project`
 - queue, worktree, memory, and review-pack tests in `tests/`
 
 ## Phase 1 Excludes
@@ -26,6 +27,26 @@ Run the installer wrapper from the distribution repo root:
 ```
 
 This shells into `python3 -m harness_kit.cli init`, renders the project templates, vendors the runtime bundle, and creates the empty runtime directories a fresh repo needs.
+
+The generated repository also receives `third_party/harness-source.txt`, which records the exact source commit and runtime bundle fileset used for the latest scaffold or sync.
+
+## Sync An Existing Generated Repo
+
+Run the distribution wrapper from the repo root:
+
+```bash
+./install/sync-project.sh --target /path/to/generated-repo
+```
+
+This refreshes only the managed sync surface:
+
+- vendored runtime modules
+- generated harness wrappers
+- generated `.harness/policies/`
+- generated `.harness/templates/`
+- generated `skills/`
+
+Top-level campaign docs, experiment logs, and source code stay untouched.
 
 ## Run Tests
 

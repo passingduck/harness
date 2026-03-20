@@ -388,6 +388,9 @@ class InitScaffoldTest(unittest.TestCase):
                 (target / ".harness" / "runtime" / "worktree-registry").is_dir()
             )
             self.assertTrue((target / ".worktrees").is_dir())
+            provenance = target / "third_party" / "harness-source.txt"
+            self.assertTrue(provenance.is_file())
+            self.assertIn("source_commit:", provenance.read_text(encoding="utf-8"))
             self.assertTrue(
                 (target / ".harness" / "templates" / "directory.md").is_file()
             )
@@ -502,6 +505,7 @@ class InitScaffoldTest(unittest.TestCase):
                 target / ".harness" / "policies" / "model-routing.yaml",
                 target / ".harness" / "templates" / "directory.md",
                 target / ".harness" / "templates" / "evidence-pack.md",
+                target / "third_party" / "harness-source.txt",
                 target / "scripts" / "harness" / "open-worktree.sh",
                 target / "scripts" / "harness" / "finish-worktree.sh",
                 target / "scripts" / "harness" / "publish-pr.sh",

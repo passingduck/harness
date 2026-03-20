@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from harness_kit.runtime_bundle import iter_runtime_bundle
+from harness_kit.sync_project import sync_project
 from harness_kit.template_loader import (
     iter_skill_files,
     iter_template_files,
@@ -84,9 +85,8 @@ def init_project(target: Path, project_name: str) -> Path:
         target.mkdir(parents=True, exist_ok=True)
 
     copy_rendered_tree(repo_root / "templates" / "project", target, project_name)
-    copy_skill_tree(repo_root / "skills", target / "skills")
-    vendor_runtime_bundle(repo_root, target)
     create_empty_directories(target)
+    sync_project(source_root=repo_root, target_root=target, project_name=project_name)
 
     print(target)
     return target

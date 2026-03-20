@@ -6,6 +6,7 @@
 - `harness_kit/scaffold.py`: project initialization, template copy/render, runtime vendoring, empty directory creation
 - `harness_kit/template_loader.py`: template and skill file discovery plus placeholder rendering
 - `harness_kit/runtime_bundle.py`: declares which modules are vendored into generated repos
+- `harness_kit/sync_project.py`: deterministic source-to-generated sync plus provenance writes
 - `harness_kit/queue.py`: queue-item validation, state transitions, and context-pack generation
 - `harness_kit/worktree.py`: worktree path selection, registry records, open/close lifecycle
 - `harness_kit/memory.py`: `DIRECTORY.md` refresh targeting and template-backed guide creation
@@ -35,8 +36,19 @@ The scaffold intentionally does not vendor `scaffold.py` into generated repos, b
 ## CLI Command Map
 
 - `init --target --project-name`: create a new harness-enabled repository from the distribution repo
+- `sync-project --target`: refresh the managed generated-repo surface and rewrite provenance metadata
 - `claim-task --repo-root --task`: move a ready queue item to `in_progress` and emit its context pack
 - `open-worktree --repo-root --task-id --branch --cleanup-policy`: provision a task-local worktree and write the registry record
 - `close-worktree --repo-root --task-id --mode --worker-status`: update the registry record and move the queue item to its next state
 - `refresh-memory --repo-root --changed-path ...`: create or reuse impacted `DIRECTORY.md` guides
 - `build-review-pack --repo-root --type --title --changed-path ... --verification-command ... [--promote-to ...]`: write a runtime review draft and optionally promote it into `docs/reviews/`
+
+## Generated Repo Provenance
+
+Each scaffolded or resynced repo receives `third_party/harness-source.txt` with:
+
+- source remote, branch, and commit
+- the current runtime bundle fileset
+- the last sync timestamp
+
+This provenance file is durable and distinct from ignored runtime state under `.harness/runtime/`.

@@ -7,6 +7,10 @@ def has_scaffold_support() -> bool:
     return importlib.util.find_spec("harness_kit.scaffold") is not None
 
 
+def has_sync_support() -> bool:
+    return importlib.util.find_spec("harness_kit.sync_project") is not None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="harness-kit")
     sub = parser.add_subparsers(dest="command")
@@ -14,6 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
         init_parser = sub.add_parser("init")
         init_parser.add_argument("--target", required=True)
         init_parser.add_argument("--project-name", required=True)
+    if has_sync_support():
+        sync_parser = sub.add_parser("sync-project")
+        sync_parser.add_argument("--target", required=True)
     claim_parser = sub.add_parser("claim-task")
     claim_parser.add_argument("--repo-root", required=True)
     claim_parser.add_argument("--task", required=True)
@@ -129,6 +136,11 @@ def main() -> int:
         from harness_kit.scaffold import init_project
 
         init_project(Path(args.target), args.project_name)
+    elif args.command == "sync-project":
+        from harness_kit.scaffold import distribution_root
+        from harness_kit.sync_project import sync_project
+
+        print(sync_project(source_root=distribution_root(), target_root=Path(args.target)))
     elif args.command == "claim-task":
         from harness_kit.queue import claim_task
 
