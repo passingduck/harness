@@ -8,6 +8,7 @@ from harness_kit.review_pack import (
     build_review_pack,
     promote_review_pack,
 )
+from harness_kit.worktree import open_worktree
 
 
 class ReviewPackTest(unittest.TestCase):
@@ -42,6 +43,38 @@ class ReviewPackTest(unittest.TestCase):
             self.assertIn("Queue state fix", text)
             self.assertIn("python3 -m unittest tests.test_queue -v", text)
 
+    def test_builds_task_scoped_runtime_pr_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._write_templates(repo)
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            pack = build_pr_review_pack(
+                repo_root=repo,
+                task_id="task-1",
+                title="Queue state fix",
+                changed_paths=["harness_kit/queue.py"],
+                verification_commands=["python3 -m unittest tests.test_queue -v"],
+            )
+
+            self.assertEqual(pack.name, "task-1-pr.md")
+            registry_text = (
+                repo
+                / ".harness"
+                / "runtime"
+                / "worktree-registry"
+                / "task-1.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "draft_pr_review_pack: .harness/runtime/review-packs/drafts/task-1-pr.md",
+                registry_text,
+            )
+
     def test_builds_runtime_commit_draft(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -73,6 +106,22 @@ class ReviewPackTest(unittest.TestCase):
             self.assertTrue(pack.is_file())
             self.assertIn("Queue state fix", pack.read_text(encoding="utf-8"))
 
+    def test_dispatches_task_scoped_pr_packs_by_review_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._write_templates(repo)
+
+            pack = build_review_pack(
+                repo_root=repo,
+                review_type="pr",
+                task_id="task-1",
+                title="Queue state fix",
+                changed_paths=["harness_kit/queue.py"],
+                verification_commands=["python3 -m unittest tests.test_queue -v"],
+            )
+
+            self.assertEqual(pack.name, "task-1-pr.md")
+
     def test_promotes_pr_review_pack_into_docs_reviews(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -93,6 +142,48 @@ class ReviewPackTest(unittest.TestCase):
             self.assertTrue(promoted.is_file())
             self.assertEqual(promoted, repo / "docs" / "reviews" / "queue-state-fix.md")
             self.assertIn("Queue state fix", promoted.read_text(encoding="utf-8"))
+
+    def test_task_scoped_pr_pack_updates_registry_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._write_templates(repo)
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+            draft = build_pr_review_pack(
+                repo_root=repo,
+                task_id="task-1",
+                title="Queue state fix",
+                changed_paths=["AGENTS.md"],
+                verification_commands=["true"],
+            )
+
+            promoted = promote_review_pack(
+                repo_root=repo,
+                draft_path=draft,
+                promote_to=Path("docs/reviews/task-1-pr.md"),
+                task_id="task-1",
+            )
+
+            self.assertEqual(promoted, repo / "docs" / "reviews" / "task-1-pr.md")
+            registry_text = (
+                repo
+                / ".harness"
+                / "runtime"
+                / "worktree-registry"
+                / "task-1.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "draft_pr_review_pack: .harness/runtime/review-packs/drafts/task-1-pr.md",
+                registry_text,
+            )
+            self.assertIn(
+                "promoted_review_pack: docs/reviews/task-1-pr.md",
+                registry_text,
+            )
 
     def test_promotion_rejects_paths_outside_docs_reviews(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

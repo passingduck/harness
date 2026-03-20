@@ -8,6 +8,7 @@ VENDORED_RUNTIME_MODULES = [
     Path("memory.py"),
     Path("queue.py"),
     Path("review_pack.py"),
+    Path("review_results.py"),
     Path("worktree.py"),
 ]
 

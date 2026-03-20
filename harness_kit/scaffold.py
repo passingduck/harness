@@ -21,6 +21,7 @@ PHASE1_EMPTY_DIRECTORIES = [
     Path(".harness/runtime/queue/done"),
     Path(".harness/runtime/context-packs"),
     Path(".harness/runtime/evidence/raw"),
+    Path(".harness/runtime/review-results"),
     Path(".harness/runtime/review-packs/drafts"),
     Path(".harness/runtime/agent-runs"),
     Path(".harness/runtime/worktree-registry"),
