@@ -4,7 +4,12 @@ import subprocess
 import unittest
 
 from harness_kit.queue import claim_task, move_task
-from harness_kit.worktree import choose_worktree_path, close_worktree, open_worktree
+from harness_kit.worktree import (
+    choose_worktree_path,
+    close_worktree,
+    open_worktree,
+    record_review_pack_path,
+)
 
 
 TASK_TEXT = """---
@@ -371,3 +376,34 @@ class WorktreePathTest(unittest.TestCase):
             self.assertTrue(review_task.is_file())
             self.assertEqual(review_task.parent.name, "review")
             self.assertEqual(record.read_text(encoding="utf-8"), before)
+
+    def test_record_review_pack_path_preserves_existing_finish_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = self._write_registry_record(root, "task-1", root / ".worktrees" / "task-1")
+            record.write_text(
+                record.read_text(encoding="utf-8").replace(
+                    "---\n",
+                    "---\n"
+                    "target_branch: main\n"
+                    "merge_strategy: squash\n"
+                    "merge_status: merged_local\n",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            record_review_pack_path(
+                root,
+                "task-1",
+                draft_path=Path(".harness/runtime/review-packs/drafts/task-1-pr.md"),
+            )
+
+            text = record.read_text(encoding="utf-8")
+            self.assertIn("target_branch: main", text)
+            self.assertIn("merge_strategy: squash", text)
+            self.assertIn("merge_status: merged_local", text)
+            self.assertIn(
+                "draft_pr_review_pack: .harness/runtime/review-packs/drafts/task-1-pr.md",
+                text,
+            )

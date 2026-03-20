@@ -38,6 +38,16 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
     )
 
+    finish_parser = sub.add_parser("finish-worktree")
+    finish_parser.add_argument("--repo-root", required=True)
+    finish_parser.add_argument("--task-id", required=True)
+    finish_parser.add_argument("--target-branch", required=True)
+    finish_parser.add_argument("--strategy", choices=["squash", "merge"], default="squash")
+    finish_parser.add_argument("--push", action="store_true")
+    finish_parser.add_argument("--cleanup", choices=["preserve", "remove"])
+    finish_parser.add_argument("--promote-review-pack")
+    finish_parser.add_argument("--commit-title")
+
     refresh_parser = sub.add_parser("refresh-memory")
     refresh_parser.add_argument("--repo-root", required=True)
     refresh_parser.add_argument(
@@ -145,6 +155,22 @@ def main() -> int:
         if moved_task is not None:
             print(moved_task)
         print(record)
+    elif args.command == "finish-worktree":
+        from harness_kit.finish_worktree import finish_worktree
+
+        result = finish_worktree(
+            repo_root=repo_root,
+            task_id=args.task_id,
+            target_branch=args.target_branch,
+            strategy=args.strategy,
+            push=args.push,
+            cleanup=args.cleanup,
+            promote_review_pack=Path(args.promote_review_pack) if args.promote_review_pack else None,
+            commit_title=args.commit_title,
+        )
+        print(result.queue_path)
+        print(result.registry_path)
+        print(result.merged_commit)
     elif args.command == "refresh-memory":
         from harness_kit.memory import refresh_memory
 

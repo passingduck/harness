@@ -64,6 +64,7 @@ class CliSmokeTest(unittest.TestCase):
             "claim-task",
             "open-worktree",
             "close-worktree",
+            "finish-worktree",
             "refresh-memory",
             "write-review-result",
             "build-review-pack",
@@ -92,6 +93,7 @@ class TemplatePresenceTest(unittest.TestCase):
             "templates/project/.harness/templates/pr-pack.md",
             "templates/project/scripts/harness/run-qa.sh",
             "templates/project/scripts/harness/write-review-result.sh",
+            "templates/project/scripts/harness/finish-worktree.sh",
             "skills/orchestrate-queue/SKILL.md",
             "skills/refresh-memory/SKILL.md",
             "skills/prepare-review-pack/SKILL.md",
@@ -395,6 +397,11 @@ class InitScaffoldTest(unittest.TestCase):
             )
             self.assertTrue(write_review_result_path.is_file())
             self.assertTrue(os.access(write_review_result_path, os.X_OK))
+            finish_worktree_path = (
+                target / "scripts" / "harness" / "finish-worktree.sh"
+            )
+            self.assertTrue(finish_worktree_path.is_file())
+            self.assertTrue(os.access(finish_worktree_path, os.X_OK))
             self.assertTrue(
                 (
                     target
@@ -403,6 +410,16 @@ class InitScaffoldTest(unittest.TestCase):
                     / "runtime"
                     / "harness_kit"
                     / "cli.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / "scripts"
+                    / "harness"
+                    / "runtime"
+                    / "harness_kit"
+                    / "finish_worktree.py"
                 ).is_file()
             )
             self.assertTrue(
@@ -434,6 +451,7 @@ class InitScaffoldTest(unittest.TestCase):
                 "claim-task",
                 "open-worktree",
                 "close-worktree",
+                "finish-worktree",
                 "refresh-memory",
                 "write-review-result",
                 "build-review-pack",
@@ -467,9 +485,16 @@ class InitScaffoldTest(unittest.TestCase):
                 target / ".harness" / "templates" / "directory.md",
                 target / ".harness" / "templates" / "evidence-pack.md",
                 target / "scripts" / "harness" / "open-worktree.sh",
+                target / "scripts" / "harness" / "finish-worktree.sh",
                 target / "scripts" / "harness" / "run-qa.sh",
                 target / "scripts" / "harness" / "write-review-result.sh",
                 target / "scripts" / "harness" / "runtime" / "harness_kit" / "cli.py",
+                target
+                / "scripts"
+                / "harness"
+                / "runtime"
+                / "harness_kit"
+                / "finish_worktree.py",
                 target
                 / "scripts"
                 / "harness"
