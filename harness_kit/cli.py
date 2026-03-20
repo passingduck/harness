@@ -48,6 +48,15 @@ def build_parser() -> argparse.ArgumentParser:
     finish_parser.add_argument("--promote-review-pack")
     finish_parser.add_argument("--commit-title")
 
+    publish_parser = sub.add_parser("publish-pr")
+    publish_parser.add_argument("--repo-root", required=True)
+    publish_parser.add_argument("--task-id", required=True)
+    publish_parser.add_argument("--target-branch", required=True)
+    publish_parser.add_argument("--title")
+    publish_parser.add_argument("--body-from-review-pack")
+    publish_parser.add_argument("--draft", action="store_true")
+    publish_parser.add_argument("--update-if-exists", action="store_true")
+
     refresh_parser = sub.add_parser("refresh-memory")
     refresh_parser.add_argument("--repo-root", required=True)
     refresh_parser.add_argument(
@@ -171,6 +180,20 @@ def main() -> int:
         print(result.queue_path)
         print(result.registry_path)
         print(result.merged_commit)
+    elif args.command == "publish-pr":
+        from harness_kit.publish_pr import publish_pr
+
+        result = publish_pr(
+            repo_root=repo_root,
+            task_id=args.task_id,
+            target_branch=args.target_branch,
+            title=args.title,
+            body_from_review_pack=Path(args.body_from_review_pack) if args.body_from_review_pack else None,
+            draft=args.draft,
+            update_if_exists=args.update_if_exists,
+        )
+        print(result.registry_path)
+        print(result.pr_url)
     elif args.command == "refresh-memory":
         from harness_kit.memory import refresh_memory
 
