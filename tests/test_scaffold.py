@@ -613,8 +613,27 @@ class InitScaffoldTest(unittest.TestCase):
             self.assertEqual(claim_proc.returncode, 0, claim_proc.stderr)
             context_packs_dir = target / ".harness" / "runtime" / "context-packs"
             context_pack = context_packs_dir / "task-1.md"
+            runtime_pycache = (
+                target / "scripts" / "harness" / "runtime" / "harness_kit" / "__pycache__"
+            )
             self.assertTrue(context_packs_dir.is_dir())
             self.assertTrue(context_pack.is_file())
+            self.assertFalse(runtime_pycache.exists())
+            for rel_path in [
+                "scripts/harness/build-review-pack.sh",
+                "scripts/harness/claim-task.sh",
+                "scripts/harness/close-worktree.sh",
+                "scripts/harness/finish-worktree.sh",
+                "scripts/harness/open-worktree.sh",
+                "scripts/harness/publish-pr.sh",
+                "scripts/harness/refresh-memory.sh",
+                "scripts/harness/write-review-result.sh",
+            ]:
+                self.assertIn(
+                    "PYTHONDONTWRITEBYTECODE=1",
+                    (target / rel_path).read_text(encoding="utf-8"),
+                    rel_path,
+                )
 
             open_proc = subprocess.run(
                 [
@@ -739,6 +758,19 @@ class InitScaffoldTest(unittest.TestCase):
                     / "task-1"
                     / "spec_scope_review.md"
                 ).is_file()
+            )
+            self.assertFalse(runtime_pycache.exists())
+
+    def test_source_install_wrappers_disable_python_bytecode(self) -> None:
+        repo_root = Path(__file__).resolve().parent.parent
+        for rel_path in [
+            "install/init-project.sh",
+            "install/sync-project.sh",
+        ]:
+            self.assertIn(
+                "PYTHONDONTWRITEBYTECODE=1",
+                (repo_root / rel_path).read_text(encoding="utf-8"),
+                rel_path,
             )
 
     def test_init_refuses_non_empty_target_directory(self) -> None:
