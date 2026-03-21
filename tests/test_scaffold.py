@@ -133,7 +133,7 @@ class TemplatePresenceTest(unittest.TestCase):
         gitignore_text = Path("templates/project/.gitignore").read_text(
             encoding="utf-8"
         )
-        for token in [".harness/runtime/", ".worktrees/", ".superpowers/"]:
+        for token in [".harness/runtime", ".harness/runtime/", ".worktrees/", ".superpowers/"]:
             self.assertIn(token, gitignore_text)
 
         model_routing_text = Path(
@@ -584,6 +584,42 @@ class InitScaffoldTest(unittest.TestCase):
                 else:
                     self.assertTrue(path.is_dir(), path)
 
+            subprocess.run(
+                ["git", "init"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Harness Tests"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "harness-tests@example.com"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "init scaffold repo"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
             task_path = target / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
             task_path.parent.mkdir(parents=True, exist_ok=True)
             task_path.write_text(TASK_TEXT, encoding="utf-8")
@@ -657,6 +693,23 @@ class InitScaffoldTest(unittest.TestCase):
                 target / ".harness" / "runtime" / "worktree-registry" / "task-1.md"
             )
             self.assertTrue(registry_record.is_file())
+            worktree_ignore_proc = subprocess.run(
+                ["git", "check-ignore", "-q", ".harness/runtime"],
+                cwd=target / ".worktrees" / "task-1",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(worktree_ignore_proc.returncode, 0)
+            worktree_status_proc = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=target / ".worktrees" / "task-1",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(worktree_status_proc.returncode, 0, worktree_status_proc.stderr)
+            self.assertEqual(worktree_status_proc.stdout.strip(), "")
 
             close_proc = subprocess.run(
                 [
