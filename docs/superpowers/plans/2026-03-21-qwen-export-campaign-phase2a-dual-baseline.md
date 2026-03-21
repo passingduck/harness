@@ -37,6 +37,8 @@ This is a separate sub-project because the old `baseline-qwen` assumptions were 
   - Record `8bit`, text-lane parity regime, and fixed-size VL smoke contract.
 - Modify: `external/qwen-export-campaign/scripts/setup/seed-runtime-state.sh`
   - Seed `source-readiness-*`, `baseline-contract-refresh`, and `baseline-qwen-dual`; retire the stale `baseline-qwen` packet deterministically.
+- Modify: `external/qwen-export-campaign/third_party/harness-source.txt`
+  - Refresh the durable provenance record to the source commit that introduced the phase-2A contract.
 - Modify: `external/qwen-export-campaign/docs/experiments/harness/scorecard.md`
   - Record contract invalidation, queue reseed behavior, and dual-baseline harness findings.
 - Modify: `external/qwen-export-campaign/docs/experiments/eval/DIRECTORY.md`
@@ -85,6 +87,7 @@ This is a separate sub-project because the old `baseline-qwen` assumptions were 
 - Modify: `external/qwen-export-campaign/SUMMARY.md`
 - Modify: `external/qwen-export-campaign/REQUIREMENT.md`
 - Modify: `external/qwen-export-campaign/scripts/setup/seed-runtime-state.sh`
+- Modify: `external/qwen-export-campaign/third_party/harness-source.txt`
 - Modify: `external/qwen-export-campaign/docs/experiments/harness/scorecard.md`
 - Modify: `external/qwen-export-campaign/docs/experiments/eval/DIRECTORY.md`
 
@@ -113,7 +116,7 @@ Update `scripts/setup/seed-runtime-state.sh` so reseeding does all of the follow
 
 - [ ] **Step 4: Record the harness reason for the reseed**
 
-Update `docs/experiments/harness/scorecard.md` with a durable note that the old baseline packet was invalidated by real workload discovery and that queue reseeding itself is part of harness evidence.
+Update `docs/experiments/harness/scorecard.md` with a durable note that the old baseline packet was invalidated by real workload discovery and that queue reseeding itself is part of harness evidence. Refresh `third_party/harness-source.txt` so it points to the source commit and timestamp of the phase-2A resync.
 
 - [ ] **Step 5: Verify the contract rewrite**
 
@@ -135,7 +138,7 @@ Expected:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add README.md SUMMARY.md REQUIREMENT.md scripts/setup/seed-runtime-state.sh docs/specs/2026-03-20-qwen-export-campaign-design.md docs/plans/2026-03-21-qwen-export-campaign-phase2a-dual-baseline.md docs/experiments/harness/scorecard.md docs/experiments/eval/DIRECTORY.md
+git add README.md SUMMARY.md REQUIREMENT.md scripts/setup/seed-runtime-state.sh third_party/harness-source.txt docs/specs/2026-03-20-qwen-export-campaign-design.md docs/plans/2026-03-21-qwen-export-campaign-phase2a-dual-baseline.md docs/experiments/harness/scorecard.md docs/experiments/eval/DIRECTORY.md
 git commit -m "캠페인 2A 계약과 큐 재시드"
 ```
 
