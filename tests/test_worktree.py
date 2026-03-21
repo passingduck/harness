@@ -163,6 +163,40 @@ class WorktreePathTest(unittest.TestCase):
             self.assertTrue(record.is_file())
             self.assertTrue((repo / ".worktrees" / "task-1").is_dir())
 
+    def test_open_worktree_links_runtime_back_to_control_root_for_git_worktrees(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            (repo / ".gitignore").write_text("/.worktrees/\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", ".gitignore"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "ignore worktrees"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            runtime_link = repo / ".worktrees" / "task-1" / ".harness" / "runtime"
+            self.assertTrue(runtime_link.is_symlink())
+            self.assertEqual(
+                runtime_link.resolve(),
+                (repo / ".harness" / "runtime").resolve(),
+            )
+
     def test_open_worktree_fails_when_gitignore_lacks_worktrees_rule(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

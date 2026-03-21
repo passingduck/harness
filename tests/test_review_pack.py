@@ -12,6 +12,34 @@ from harness_kit.worktree import open_worktree
 
 
 class ReviewPackTest(unittest.TestCase):
+    def _init_git_repo(self, repo: Path) -> None:
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "config", "user.name", "Harness Tests"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "harness-tests@example.com"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        (repo / "README.md").write_text("test repo\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
     def _write_templates(self, repo: Path) -> None:
         templates = repo / ".harness" / "templates"
         templates.mkdir(parents=True, exist_ok=True)
@@ -142,6 +170,87 @@ class ReviewPackTest(unittest.TestCase):
             self.assertTrue(promoted.is_file())
             self.assertEqual(promoted, repo / "docs" / "reviews" / "queue-state-fix.md")
             self.assertIn("Queue state fix", promoted.read_text(encoding="utf-8"))
+
+    def test_git_worktree_task_scoped_pack_uses_control_runtime_and_branch_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            self._write_templates(repo)
+            (repo / ".gitignore").write_text("/.worktrees/\n", encoding="utf-8")
+            import subprocess
+
+            subprocess.run(
+                ["git", "add", ".gitignore", ".harness/templates"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "add templates"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+            worktree_root = repo / ".worktrees" / "task-1"
+
+            draft = build_pr_review_pack(
+                repo_root=worktree_root,
+                task_id="task-1",
+                title="Queue state fix",
+                changed_paths=["AGENTS.md"],
+                verification_commands=["true"],
+            )
+
+            self.assertTrue(draft.is_file())
+            self.assertTrue(
+                (
+                    repo
+                    / ".harness"
+                    / "runtime"
+                    / "review-packs"
+                    / "drafts"
+                    / "task-1-pr.md"
+                ).is_file()
+            )
+
+            promoted = promote_review_pack(
+                repo_root=worktree_root,
+                draft_path=Path(".harness/runtime/review-packs/drafts/task-1-pr.md"),
+                promote_to=Path("docs/reviews/task-1-pr.md"),
+                task_id="task-1",
+            )
+
+            self.assertEqual(
+                promoted,
+                worktree_root / "docs" / "reviews" / "task-1-pr.md",
+            )
+            self.assertIn(
+                "Queue state fix",
+                promoted.read_text(encoding="utf-8"),
+            )
+            registry_text = (
+                repo
+                / ".harness"
+                / "runtime"
+                / "worktree-registry"
+                / "task-1.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "draft_pr_review_pack: .harness/runtime/review-packs/drafts/task-1-pr.md",
+                registry_text,
+            )
+            self.assertIn(
+                "promoted_review_pack: docs/reviews/task-1-pr.md",
+                registry_text,
+            )
 
     def test_task_scoped_pr_pack_updates_registry_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

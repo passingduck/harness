@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -82,6 +83,24 @@ def _ensure_worktree_roots(repo_root: Path) -> None:
     (repo_root / ".worktrees").mkdir(parents=True, exist_ok=True)
 
 
+def _link_shared_runtime(repo_root: Path, worktree_path: Path) -> None:
+    runtime_root = repo_root / ".harness" / "runtime"
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    harness_root = worktree_path / ".harness"
+    harness_root.mkdir(parents=True, exist_ok=True)
+    worktree_runtime = harness_root / "runtime"
+    if worktree_runtime.is_symlink():
+        if worktree_runtime.resolve(strict=False) == runtime_root.resolve(strict=False):
+            return
+        worktree_runtime.unlink()
+    elif worktree_runtime.exists():
+        if worktree_runtime.is_dir():
+            shutil.rmtree(worktree_runtime)
+        else:
+            worktree_runtime.unlink()
+    worktree_runtime.symlink_to(runtime_root, target_is_directory=True)
+
+
 def _verify_worktrees_ignored(repo_root: Path) -> None:
     if not _is_git_repo(repo_root):
         return
@@ -142,11 +161,12 @@ def _write_registry_record(record_path: Path, record: dict[str, Any]) -> None:
 
 
 def _repo_relative_registry_path(repo_root: Path, path: Path | str) -> str:
+    repo_root = Path(os.path.abspath(repo_root))
     candidate = Path(path)
     if not candidate.is_absolute():
         candidate = repo_root / candidate
-    resolved = candidate.resolve(strict=False)
-    relative = resolved.relative_to(repo_root.resolve())
+    resolved = Path(os.path.abspath(candidate))
+    relative = resolved.relative_to(repo_root)
     return str(relative)
 
 
@@ -227,6 +247,7 @@ def open_worktree(
     _ensure_worktree_roots(repo_root)
     worktree_path = choose_worktree_path(repo_root, task_id)
     _provision_worktree(repo_root, worktree_path, branch_name)
+    _link_shared_runtime(repo_root, worktree_path)
     baseline_verified = worktree_path.exists()
     record = {
         "task_id": task_id,
