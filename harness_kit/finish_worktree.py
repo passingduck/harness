@@ -69,16 +69,29 @@ def _ensure_docs_updated(repo_root: Path, target_branch: str, source_branch: str
 
 
 def _resolve_review_pack_paths(repo_root: Path, task_id: str, record: dict[str, object]) -> tuple[Path, Path | None]:
+    worktree_root: Path | None = None
+    raw_worktree_path = record.get("path")
+    if isinstance(raw_worktree_path, str) and raw_worktree_path:
+        worktree_root = Path(raw_worktree_path).resolve(strict=False)
+
+    def iter_candidates(raw_path: str) -> list[Path]:
+        candidates: list[Path] = [(repo_root / raw_path).resolve(strict=False)]
+        if worktree_root is not None:
+            worktree_candidate = (worktree_root / raw_path).resolve(strict=False)
+            if worktree_candidate not in candidates:
+                candidates.append(worktree_candidate)
+        return candidates
+
     promoted = record.get("promoted_review_pack")
     if isinstance(promoted, str) and promoted:
-        promoted_path = (repo_root / promoted).resolve(strict=False)
-        if promoted_path.is_file():
-            return promoted_path, None
+        for promoted_path in iter_candidates(promoted):
+            if promoted_path.is_file():
+                return promoted_path, None
     draft = record.get("draft_pr_review_pack")
     if isinstance(draft, str) and draft:
-        draft_path = (repo_root / draft).resolve(strict=False)
-        if draft_path.is_file():
-            return draft_path, repo_root / "docs" / "reviews" / f"{task_id}.md"
+        for draft_path in iter_candidates(draft):
+            if draft_path.is_file():
+                return draft_path, repo_root / "docs" / "reviews" / f"{task_id}.md"
     default_draft = repo_root / ".harness" / "runtime" / "review-packs" / "drafts" / f"{task_id}-pr.md"
     if default_draft.is_file():
         return default_draft, repo_root / "docs" / "reviews" / f"{task_id}.md"
@@ -179,7 +192,9 @@ def finish_worktree(
         )
         _run_git(repo_root, ["add", str(promoted_path.relative_to(repo_root))])
     elif review_source.is_relative_to(repo_root):
-        _run_git(repo_root, ["add", str(review_source.relative_to(repo_root))])
+        review_source_rel = review_source.relative_to(repo_root)
+        if not str(review_source_rel).startswith(".worktrees/"):
+            _run_git(repo_root, ["add", str(review_source_rel)])
 
     title = commit_title or str(task.frontmatter["title"])
     _run_git(repo_root, ["commit", "-m", title])

@@ -6,7 +6,7 @@ import unittest
 from harness_kit.finish_worktree import finish_worktree
 from harness_kit.queue import claim_task
 from harness_kit.review_results import write_review_result
-from harness_kit.worktree import close_worktree, open_worktree
+from harness_kit.worktree import close_worktree, open_worktree, record_review_pack_path
 
 
 TASK_TEXT = """---
@@ -219,6 +219,67 @@ class FinishWorktreeTest(unittest.TestCase):
             self.assertIn("merge_status: merged_local", registry_text)
             self.assertIn("push_status: failed", registry_text)
             self.assertIn("merged_commit:", registry_text)
+
+    def test_finish_worktree_uses_worktree_promoted_review_pack_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            task = self._write_ready_task(repo)
+            claim_task(task_path=task, repo_root=repo)
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            worktree = repo / ".worktrees" / "task-1"
+            (worktree / "src").mkdir(parents=True, exist_ok=True)
+            (worktree / "src" / "feature.txt").write_text("task work\n", encoding="utf-8")
+            (worktree / "docs" / "reviews").mkdir(parents=True, exist_ok=True)
+            (worktree / "docs" / "reviews" / "custom-pack.md").write_text(
+                "# PR Review Pack\n\nCustom narrative.\n",
+                encoding="utf-8",
+            )
+            self._run_git(worktree, "add", "src/feature.txt", "docs/reviews/custom-pack.md")
+            self._run_git(worktree, "commit", "-m", "태스크 구현")
+            record_review_pack_path(
+                repo_root=worktree,
+                task_id="task-1",
+                promoted_path=Path("docs/reviews/custom-pack.md"),
+            )
+
+            close_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                mode="preserve",
+                worker_status="DONE",
+            )
+            write_review_result(
+                repo_root=repo,
+                task_id="task-1",
+                stage="spec_scope_review",
+                verdict="APPROVED",
+                blocking_issues=[],
+                advisory_notes=["ready to finish"],
+                evidence_refs=["docs/reviews/custom-pack.md"],
+                next_action="finish",
+            )
+
+            result = finish_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                target_branch="main",
+                strategy="squash",
+                push=False,
+                cleanup="preserve",
+                commit_title="태스크 머지",
+            )
+
+            self.assertTrue((repo / "docs" / "reviews" / "custom-pack.md").is_file())
+            self.assertFalse((repo / "docs" / "reviews" / "task-1.md").exists())
+            registry_text = result.registry_path.read_text(encoding="utf-8")
+            self.assertIn("promoted_review_pack: docs/reviews/custom-pack.md", registry_text)
 
 
 if __name__ == "__main__":

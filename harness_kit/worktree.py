@@ -130,6 +130,25 @@ def _run_git(repo_root: Path, args: list[str]) -> None:
         raise RuntimeError(message)
 
 
+def _current_branch(repo_root: Path) -> str | None:
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    branch = proc.stdout.strip()
+    return branch or None
+
+
+def _reuse_existing_worktree_if_attached(worktree_path: Path, branch_name: str) -> bool:
+    if not worktree_path.exists():
+        return False
+    return _current_branch(worktree_path) == branch_name
+
+
 def _provision_worktree(repo_root: Path, worktree_path: Path, branch_name: str) -> None:
     if not _is_git_repo(repo_root):
         worktree_path.mkdir(parents=True, exist_ok=True)
@@ -137,6 +156,8 @@ def _provision_worktree(repo_root: Path, worktree_path: Path, branch_name: str) 
     try:
         _run_git(repo_root, ["worktree", "add", "-b", branch_name, str(worktree_path)])
     except RuntimeError:
+        if _reuse_existing_worktree_if_attached(worktree_path, branch_name):
+            return
         _run_git(repo_root, ["worktree", "add", str(worktree_path), branch_name])
 
 
