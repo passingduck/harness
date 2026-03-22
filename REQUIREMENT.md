@@ -4,6 +4,7 @@
 
 - Python: `python3` must be available, and phase 1 assumes a modern Python 3 interpreter that can run the standard-library-only `harness_kit` package and `python3 -m unittest`.
 - Git: `git` must be available for repositories that use the phase-1 worktree flow. Non-git temp directories are supported for basic local scaffolding tests, but real worktree orchestration assumes a normal git worktree-capable repository.
+- GitHub CLI: `gh` is optional and only required for the `publish-pr` adapter path.
 - Shell: generated wrapper scripts assume a POSIX shell environment with `bash`.
 
 ## Deterministic Adapter Rule
@@ -15,6 +16,8 @@ Phase 1 keeps the canonical source of truth in the repo-native markdown, policy,
 - generated adapters must not become the authoritative source of truth
 
 This is why the generated repos vendor a fixed subset of `harness_kit` runtime modules instead of depending on mutable external tooling.
+
+The generated repo records the exact source state that produced that deterministic surface in `third_party/harness-source.txt`.
 
 ## Codex-First Support Statement
 
@@ -32,3 +35,5 @@ Support for Claude Code and GitHub Copilot CLI is intentionally excluded from ph
 - Documentation is written in English
 - Commit messages are written in Korean
 - Queue state is directory-authoritative in generated repos
+- `sync-project` only overwrites the managed generated surface: vendored runtime, harness wrappers, generated `.harness/policies/`, generated `.harness/templates/`, and generated `skills/`
+- campaign-owned files outside that surface must remain untouched across syncs

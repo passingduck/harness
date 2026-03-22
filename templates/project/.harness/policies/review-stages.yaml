@@ -19,4 +19,4 @@ stages:
   - stage: adversarial_regression_review
     purpose: Probe likely regressions and abuse cases before human handoff.
   - stage: human_review_pack_review
-    purpose: Validate the review narrative and remaining risks.
+    purpose: Validate the task-linked review narrative and remaining risks before finish-worktree.

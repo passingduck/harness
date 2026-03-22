@@ -5,11 +5,13 @@
 Validate the harness boilerplate on a real, high-friction ML systems campaign rather than a toy repo. The campaign must exercise queue orchestration, worktree isolation, review gates, directory memory, review narratives, and merge/publish flow while attempting a concrete technical goal:
 
 - run `Qwen/Qwen3.5-9B` on a real `RTX 4070 Ti SUPER 16GB`
-- export a dynamic-prompt-length PT2 graph with static cache and dynamic `SymInt`
-- compare `WikiText2` perplexity against a baseline and keep relative delta within `3%`
+- validate both the text-only lane and the multimodal reality of the checkpoint
+- export a dynamic-prompt-length PT2 graph with static cache and dynamic `SymInt` on the text decode path only in phase 2
+- compare `WikiText2` perplexity against a text-lane baseline and keep relative delta within `3%`
+- run a small `COCO captions` multimodal smoke evaluation with generated-caption artifacts
 - replace exported `ATen` coverage with Triton kernels where feasible
 - run an interpreter path over the exported PT2 using those custom kernels
-- compare baseline/export/custom-kernel perplexity again
+- compare text baseline/export/custom-kernel perplexity again
 
 The primary success condition is not merely model execution. It is proving which harness features help, which require improvement, and which should be removed when applied to a difficult real-world workflow.
 
@@ -50,9 +52,10 @@ The campaign is decomposed into staged tasks so harness failures and ML failures
 - create a real harness-enabled campaign repo under `external/`
 - model the campaign as queue-driven work rather than ad-hoc scripts
 - dynamic prompt length coverage across multiple export cases
-- weight-only quantization as an allowed memory strategy
+- weight-only quantization as an allowed memory strategy, with `8bit` as the default proving path for phase 2
 - Triton as the allowed custom kernel mechanism
-- `WikiText2` perplexity parity checks
+- `WikiText2` perplexity parity checks for the text lane
+- `COCO captions` sample-based multimodal smoke validation for the VL lane
 - explicit hardware-aware documentation for `RTX 4070 Ti SUPER 16GB`
 - closeout review documenting `keep`, `improve`, and `remove` recommendations for the harness
 
@@ -77,18 +80,21 @@ The campaign is decomposed into staged tasks so harness failures and ML failures
 
 The campaign validates three layers at once.
 
-1. `ML correctness`
-   - baseline Qwen inference must run under the real hardware constraint
-   - PT2 export with static cache and dynamic `SymInt` must succeed for multiple prompt-length cases
+1. `Harness correctness`
+   - queue, context packs, worktree lifecycle, review receipts, memory refresh, review packs, and closeout flow are all exercised on a nontrivial project
+   - discovered harness friction is promoted into explicit improvement or removal decisions
+   - contract changes caused by real workload discoveries are themselves first-class harness events
+2. `ML correctness`
+   - the checkpoint must be validated as both a text-export target and a real multimodal model
+   - text baseline inference must run under the real hardware constraint
+   - multimodal baseline smoke must run on a small `COCO captions` sample
+   - PT2 export with static cache and dynamic `SymInt` must succeed for multiple prompt-length cases on the text decode path
    - exported inference must preserve `WikiText2` perplexity within the agreed threshold
-2. `Kernel/backend correctness`
+3. `Kernel/backend correctness`
    - exported `ATen` coverage is inventoried
    - Triton replacements are added incrementally
    - an interpreter path dispatches to those kernels
    - perplexity is rechecked against the same baseline
-3. `Harness correctness`
-   - queue, context packs, worktree lifecycle, review receipts, memory refresh, review packs, and closeout flow are all exercised on a nontrivial project
-   - discovered harness friction is promoted into explicit improvement or removal decisions
 
 ## Repository Structure
 
@@ -190,6 +196,7 @@ Required readiness capabilities in the source repo:
 - `finish-worktree`
 - `publish-pr`
 - a deterministic generated-repo resync path for vendored runtime and template updates
+- runnable repo-local behavior for the mandatory review stages, even if the first pass is placeholder or policy-driven rather than fully automated
 
 This creates two phases:
 
@@ -201,6 +208,14 @@ This creates two phases:
    - only now begin using the repo as the proving ground
 
 Before readiness passes, failures are classified as harness implementation debt, not campaign evidence about harness usefulness.
+
+Campaign execution may not start until a durable source-repo readiness record exists. That record must point to:
+
+- the source-repo commit that landed the required capabilities
+- the verification command set that passed
+- the resync operation that propagated those capabilities into `external/qwen-export-campaign/`
+
+Readiness-gate items are blocking. They are not optional campaign-time discoveries.
 
 ## Synchronization Contract
 
@@ -242,49 +257,79 @@ Manual ad hoc copying is not an acceptable long-term sync method.
 
 ## Queue Decomposition
 
-The campaign is broken into at least eight queue tasks.
+The campaign queue spans both repositories. Source-repo bootstrap tasks must complete before external-repo execution tasks may advance.
 
-1. `campaign-setup`
+1. `source-readiness-bootstrap`
+   - land blocking harness capabilities in `harness/`
+   - implement or document repo-local fallback behavior for the mandatory review stages
+2. `source-readiness-verify`
+   - verify readiness-gate commands in the source repo
+   - resync the generated repo and record the readiness provenance
+3. `campaign-setup`
    - initialize the campaign repo
    - add bootstrap scripts and baseline docs
    - verify runtime roots and commands
-2. `hardware-profile`
+4. `hardware-profile`
    - document the real `RTX 4070 Ti SUPER 16GB` constraints
    - record VRAM, cache, token-budget, and toolchain policy
-3. `baseline-qwen`
-   - create the baseline model-loading and inference path
-   - run baseline `WikiText2` perplexity
-4. `dynamic-export`
-   - implement multi-export coverage for dynamic prompt lengths
+5. `baseline-contract-refresh`
+   - update queue/context/docs when checkpoint reality or hardware facts invalidate the current baseline assumptions
+   - record rejected paths such as unsupported offload strategies as durable evidence
+6. `baseline-qwen-dual`
+   - create the shared loader and dual-lane baseline path
+   - run text-lane `WikiText2` perplexity
+   - run multimodal `COCO captions` sample smoke
+7. `dynamic-export`
+   - implement multi-export coverage for dynamic prompt lengths on the text decode path only
    - produce PT2 artifacts with static cache and dynamic `SymInt`
    - extract `ATen` inventory
-5. `export-parity`
-   - run exported PT2 evaluation
-   - compare perplexity to baseline
-6. `triton-kernel-coverage`
-   - classify exported `ATen` families
+8. `export-parity`
+   - run exported PT2 evaluation on the text decode path only
+   - compare text-lane perplexity to baseline
+9. `triton-kernel-coverage`
+   - classify exported `ATen` families for the text decode path only
    - add Triton replacements and tests
-7. `interpreter-parity`
-   - run the interpreter path with custom-kernel dispatch
-   - compare perplexity again
-8. `campaign-closeout`
+10. `interpreter-parity`
+   - run the interpreter path with custom-kernel dispatch for the text decode path only
+   - compare text-lane perplexity again
+11. `campaign-closeout`
    - complete review narratives
    - evaluate harness usefulness
    - produce `keep / improve / remove` recommendations
+
+### Required Dependency Edges
+
+The minimum dependency chain is:
+
+- `source-readiness-verify` depends on `source-readiness-bootstrap`
+- `campaign-setup` depends on `source-readiness-verify`
+- `hardware-profile` depends on `campaign-setup`
+- `baseline-contract-refresh` depends on `hardware-profile`
+- `baseline-qwen-dual` depends on `baseline-contract-refresh`
+- `dynamic-export` depends on `baseline-qwen-dual`
+- `export-parity` depends on `dynamic-export`
+- `triton-kernel-coverage` depends on `export-parity`
+- `interpreter-parity` depends on `triton-kernel-coverage`
+- `campaign-closeout` depends on all prior execution tasks
+
+If `baseline-contract-refresh` reopens after any downstream artifact exists, those downstream baseline/export/parity artifacts become stale and must not be treated as current evidence until regenerated.
 
 ### Parallelism Policy
 
 Some work may run in parallel when dependencies allow it:
 
-- `hardware-profile` can proceed alongside early baseline setup
+- source-repo readiness work can proceed alongside nonblocking campaign scaffolding
+- `hardware-profile` can proceed alongside baseline scaffolding only before any durable baseline artifact is produced
 - `ATen` inventory analysis can proceed alongside exported-eval runner setup
 - Triton kernel work can split across independent operator families
 
 Parallelism is desirable because it tests whether the harness can support multi-worktree, multi-review operation rather than only linear workflows.
 
+Parallelism does not relax dependency edges. No real baseline run, export artifact, or parity claim may proceed while an open `baseline-contract-refresh` task exists.
+
 ## Queue Item Contract
 
-The eight campaign tasks are not merely names. Every campaign queue item must use the normal harness contract fields so the campaign actually tests context-pack usefulness.
+The campaign tasks are not merely names. Every campaign queue item must use the normal harness contract fields so the campaign actually tests context-pack usefulness.
 
 Each queue item must explicitly declare at least:
 
@@ -310,8 +355,11 @@ Micro-iterations inside one active worktree do not each require separate queue i
 
 At minimum, the follow-up implementation plan must define concrete queue-item fields for:
 
+- `source-readiness-bootstrap`
+- `source-readiness-verify`
 - `campaign-setup`
-- `baseline-qwen`
+- `baseline-contract-refresh`
+- `baseline-qwen-dual`
 - `dynamic-export`
 - `triton-kernel-coverage`
 
@@ -334,10 +382,17 @@ The campaign must treat this as a hard design input rather than an afterthought.
 ### Model and Precision Policy
 
 - target model: `Qwen/Qwen3.5-9B`
+- the published checkpoint is treated as a multimodal model, not assumed to be text-only
+- text baseline and export work use `Qwen3_5ForCausalLM` with the checkpoint's `text_config`
+- multimodal smoke validation uses `Qwen3_5ForConditionalGeneration` with the full checkpoint config
 - prompt length is dynamic and therefore export coverage must be multi-case, not single-shape only
 - full precision only is rejected as unrealistic for this card
 - `weight-only quantization` is allowed
+- `8bit` is the default proving path for phase 2 because it supports the required offload patterns more directly on this hardware
 - quantization policy must be documented in the campaign repo before parity claims are accepted
+- rejected quantization paths discovered during the campaign must be written into durable docs and scorecard evidence
+- the canonical text parity contract is single-regime: baseline, exported PT2, and interpreter runs must use the same quantization policy when compared
+- if a downstream text lane cannot support the phase-2 default `8bit` regime, the task must transition to `blocked` or open a new scoped fallback task; it may not claim parity against a different-regime baseline
 
 ### Kernel Policy
 
@@ -347,7 +402,7 @@ The campaign must treat this as a hard design input rather than an afterthought.
 
 ### Evaluation Policy
 
-Use `WikiText2` as the shared perplexity comparison dataset across all three execution paths:
+Use `WikiText2` as the shared perplexity comparison dataset across the three text execution paths:
 
 - baseline
 - exported PT2
@@ -358,6 +413,32 @@ Passing threshold:
 - relative perplexity delta must be `<= 3%`
 
 If a path fails this gate, the failure is recorded and the queue loops rather than silently advancing.
+
+For the multimodal baseline lane, use a small `COCO captions` sample set to produce durable image-conditioned generation artifacts. This lane is a smoke validation path, not a parity benchmark in phase 2. Each sample artifact must record:
+
+- sample identifier
+- image reference
+- prompt used
+- generated caption
+- short human note
+
+The sample set must be reproducible:
+
+- use exactly `5` samples in phase 2
+- selection must follow a stable rule recorded in durable docs, such as a committed list of ascending sample identifiers
+- `baseline-qwen-dual` does not pass unless all `5` sample artifacts exist and each generated caption is non-empty text
+
+## Task-Level Acceptance
+
+Every queue item must record two acceptance classes when applicable:
+
+- `Harness acceptance`
+  - whether the queue/context/review/memory/finish flow remained coherent for the task
+  - whether any harness contract had to be revised before the workload could proceed
+- `Workload acceptance`
+  - the task's ML, export, or kernel-specific success criteria
+
+The campaign is not allowed to treat workload progress as sufficient evidence that the harness worked well.
 
 ## Harness Measurement Contract
 
@@ -470,6 +551,15 @@ If the harness itself causes friction, that is a valid campaign result. Examples
 
 Such findings must be promoted into explicit `harness-gap` issues and, when appropriate, reflected back into the `harness/` repo through new specs, plans, or implementation work.
 
+Queue transitions on harness failures are also explicit:
+
+- a task may not transition to `done` while `Harness acceptance` is failing
+- `review -> in_progress` when the task can repair the harness-facing contract locally
+- `review -> ready` when the task must be reframed or split before safe continuation
+- `review -> blocked` when the source `harness/` repo needs a prerequisite fix
+
+If workload acceptance passes but harness acceptance fails, the task remains unresolved.
+
 ### Harness-Gap Storage Contract
 
 Raw runtime evidence may remain ephemeral, but each harness-gap finding that informs a final `keep / improve / remove` verdict must have a durable summary.
@@ -506,32 +596,39 @@ The final closeout must classify outcomes as:
 
 Before implementation starts, the most likely gaps are:
 
-1. `review-results` runtime support is still thin relative to the spec
-2. `finish-worktree` and `publish-pr` are designed but not yet implemented
-3. generated-repo resync does not yet have a canonical command
-4. queue-item authoring for large campaigns is likely too manual
-5. evidence ergonomics for GPU tasks are likely insufficient
-6. directory-memory refresh may prove too noisy for ML-heavy repos
-7. toolchain bootstrap for Torch/Transformers/Triton may need repo-local conventions that phase 1 does not yet encode
+1. queue-item authoring for large campaigns is likely too manual even after readiness passes
+2. evidence ergonomics for GPU tasks are likely insufficient
+3. directory-memory refresh may prove too noisy for ML-heavy repos
+4. toolchain bootstrap for Torch/Transformers/Triton may need repo-local conventions that phase 1 does not yet encode
+5. mandatory review stages may be formally runnable but still too weak or too expensive in real work
 
-These are not reasons to delay the campaign. They are reasons to start it with an explicit expectation that harness iteration will occur alongside ML work.
+Readiness-gate gaps block campaign execution. Only post-readiness usability gaps are expected to surface during the campaign itself.
 
 ## Acceptance Criteria
 
 The campaign design is satisfactory when all of the following are true:
 
 - readiness-gate dependencies are explicit, so campaign evidence is not confused with missing harness implementation
+- source-repo bootstrap tasks are explicit and block external campaign execution until verified
 - the hybrid repo model includes a deterministic source-to-generated sync contract
 - a real harness-enabled campaign repo can be initialized under `external/`
 - the campaign repo records which harness source SHA/runtime bundle it is synced from
 - the campaign repo structure supports directory-local knowledge growth
 - the work is decomposed into queue tasks rather than treated as a single opaque effort
+- the queue decomposition explicitly allows contract-refresh tasks when workload reality changes
 - queue items are required to use the full harness task contract rather than free-form names only
+- harness correctness is treated as the primary validation layer rather than a side effect of ML progress
 - dynamic prompt length coverage is a first-class export requirement
-- `weight-only quantization` is allowed and documented
+- `weight-only quantization` is allowed and documented, with `8bit` selected as the default phase-2 path
+- the text parity contract requires a single shared quantization regime across compared lanes
+- the checkpoint's multimodal nature is reflected in both docs and baseline validation
+- a `COCO captions` sample-based multimodal smoke lane is required for phase 2
+- the VL smoke lane uses a reproducible fixed-size sample contract
 - Triton is the first custom-kernel path
-- `WikiText2` perplexity parity threshold is fixed at `<= 3%`
+- `WikiText2` text-lane perplexity parity threshold is fixed at `<= 3%`
 - ML failures and harness failures both feed deterministic review loops
+- tasks record separate harness and workload acceptance evidence where applicable
+- tasks cannot close while harness acceptance remains open
 - harness usefulness is measured through a durable feature scorecard rather than anecdotal closeout text
 - harness-gap findings have durable traceable summaries
 - the final campaign closeout will produce `keep / improve / remove` recommendations for the harness

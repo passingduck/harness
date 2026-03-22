@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -27,8 +28,20 @@ WORKTREE_REGISTRY_FIELDS = [
     "status",
     "baseline_verified",
     "cleanup_policy",
+    "target_branch",
+    "merge_strategy",
+    "merge_status",
+    "merged_commit",
+    "push_status",
+    "push_remote",
+    "publish_head_ref",
     "draft_pr_review_pack",
     "promoted_review_pack",
+    "pr_number",
+    "pr_url",
+    "adapter_status",
+    "finished_at",
+    "finalization_notes",
 ]
 WORKER_STATUS_TO_QUEUE_STATE = {
     "DONE": "review",
@@ -70,6 +83,24 @@ def _ensure_worktree_roots(repo_root: Path) -> None:
     (repo_root / ".worktrees").mkdir(parents=True, exist_ok=True)
 
 
+def _link_shared_runtime(repo_root: Path, worktree_path: Path) -> None:
+    runtime_root = repo_root / ".harness" / "runtime"
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    harness_root = worktree_path / ".harness"
+    harness_root.mkdir(parents=True, exist_ok=True)
+    worktree_runtime = harness_root / "runtime"
+    if worktree_runtime.is_symlink():
+        if worktree_runtime.resolve(strict=False) == runtime_root.resolve(strict=False):
+            return
+        worktree_runtime.unlink()
+    elif worktree_runtime.exists():
+        if worktree_runtime.is_dir():
+            shutil.rmtree(worktree_runtime)
+        else:
+            worktree_runtime.unlink()
+    worktree_runtime.symlink_to(runtime_root, target_is_directory=True)
+
+
 def _verify_worktrees_ignored(repo_root: Path) -> None:
     if not _is_git_repo(repo_root):
         return
@@ -99,6 +130,25 @@ def _run_git(repo_root: Path, args: list[str]) -> None:
         raise RuntimeError(message)
 
 
+def _current_branch(repo_root: Path) -> str | None:
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    branch = proc.stdout.strip()
+    return branch or None
+
+
+def _reuse_existing_worktree_if_attached(worktree_path: Path, branch_name: str) -> bool:
+    if not worktree_path.exists():
+        return False
+    return _current_branch(worktree_path) == branch_name
+
+
 def _provision_worktree(repo_root: Path, worktree_path: Path, branch_name: str) -> None:
     if not _is_git_repo(repo_root):
         worktree_path.mkdir(parents=True, exist_ok=True)
@@ -106,6 +156,8 @@ def _provision_worktree(repo_root: Path, worktree_path: Path, branch_name: str) 
     try:
         _run_git(repo_root, ["worktree", "add", "-b", branch_name, str(worktree_path)])
     except RuntimeError:
+        if _reuse_existing_worktree_if_attached(worktree_path, branch_name):
+            return
         _run_git(repo_root, ["worktree", "add", str(worktree_path), branch_name])
 
 
@@ -130,12 +182,33 @@ def _write_registry_record(record_path: Path, record: dict[str, Any]) -> None:
 
 
 def _repo_relative_registry_path(repo_root: Path, path: Path | str) -> str:
+    repo_root = Path(os.path.abspath(repo_root))
     candidate = Path(path)
     if not candidate.is_absolute():
         candidate = repo_root / candidate
-    resolved = candidate.resolve(strict=False)
-    relative = resolved.relative_to(repo_root.resolve())
+    resolved = Path(os.path.abspath(candidate))
+    relative = resolved.relative_to(repo_root)
     return str(relative)
+
+
+def load_worktree_registry(repo_root: Path, task_id: str) -> tuple[Path, dict[str, Any]]:
+    task_id = validate_phase1_task_id(task_id)
+    record_path = _registry_record_path(repo_root, task_id)
+    if not record_path.is_file():
+        raise FileNotFoundError(f"Missing worktree registry record: {record_path}")
+    record = _read_registry_record(record_path)
+    if record.get("task_id") != task_id:
+        raise ValueError("Worktree registry task_id must match the requested task.")
+    return record_path, record
+
+
+def write_worktree_registry(repo_root: Path, task_id: str, record: dict[str, Any]) -> Path:
+    task_id = validate_phase1_task_id(task_id)
+    record = dict(record)
+    record["task_id"] = task_id
+    record_path = _registry_record_path(repo_root, task_id)
+    _write_registry_record(record_path, record)
+    return record_path
 
 
 def record_review_pack_path(
@@ -145,16 +218,15 @@ def record_review_pack_path(
     draft_path: Path | str | None = None,
     promoted_path: Path | str | None = None,
 ) -> Path | None:
-    record_path = _registry_record_path(repo_root, task_id)
-    if not record_path.is_file():
+    try:
+        record_path, record = load_worktree_registry(repo_root, task_id)
+    except FileNotFoundError:
         return None
-    record = _read_registry_record(record_path)
     if draft_path is not None:
         record["draft_pr_review_pack"] = _repo_relative_registry_path(repo_root, draft_path)
     if promoted_path is not None:
         record["promoted_review_pack"] = _repo_relative_registry_path(repo_root, promoted_path)
-    _write_registry_record(record_path, record)
-    return record_path
+    return write_worktree_registry(repo_root, task_id, record)
 
 
 def _resolve_registry_worktree_path(repo_root: Path, task_id: str, raw_path: str) -> Path:
@@ -196,6 +268,7 @@ def open_worktree(
     _ensure_worktree_roots(repo_root)
     worktree_path = choose_worktree_path(repo_root, task_id)
     _provision_worktree(repo_root, worktree_path, branch_name)
+    _link_shared_runtime(repo_root, worktree_path)
     baseline_verified = worktree_path.exists()
     record = {
         "task_id": task_id,
@@ -206,9 +279,7 @@ def open_worktree(
         "baseline_verified": baseline_verified,
         "cleanup_policy": cleanup_policy,
     }
-    record_path = _registry_record_path(repo_root, task_id)
-    _write_registry_record(record_path, record)
-    return record_path
+    return write_worktree_registry(repo_root, task_id, record)
 
 
 def close_worktree(
@@ -223,10 +294,7 @@ def close_worktree(
     if mode not in {"preserve", "delete"}:
         raise ValueError(f"Unsupported worktree close mode: {mode}")
     _ensure_worktree_roots(repo_root)
-    record_path = _registry_record_path(repo_root, task_id)
-    if not record_path.is_file():
-        raise FileNotFoundError(f"Missing worktree registry record: {record_path}")
-    record = _read_registry_record(record_path)
+    record_path, record = load_worktree_registry(repo_root, task_id)
     worktree_path = _resolve_registry_worktree_path(repo_root, task_id, str(record["path"]))
     task_path = _validate_close_transition(repo_root, task_id, worker_status)
     if mode == "delete":
@@ -235,7 +303,7 @@ def close_worktree(
     else:
         record["status"] = "preserved"
     record["cleanup_policy"] = mode
-    _write_registry_record(record_path, record)
+    record_path = write_worktree_registry(repo_root, task_id, record)
 
     moved_task: Path | None = None
     if task_path is not None:

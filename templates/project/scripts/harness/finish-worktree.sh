@@ -4,4 +4,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHONDONTWRITEBYTECODE=1 \
 PYTHONPATH="$ROOT/scripts/harness/runtime${PYTHONPATH:+:$PYTHONPATH}" \
-  python3 -m harness_kit.cli open-worktree --repo-root "$ROOT" "$@"
+  python3 -m harness_kit.cli finish-worktree --repo-root "$ROOT" "$@"

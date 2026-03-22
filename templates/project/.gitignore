@@ -1,3 +1,5 @@
+.harness/runtime
 .harness/runtime/
 .worktrees/
 .superpowers/
+# Runtime state is recreated by durable setup scripts and should stay ignored.

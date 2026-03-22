@@ -7,6 +7,10 @@ def has_scaffold_support() -> bool:
     return importlib.util.find_spec("harness_kit.scaffold") is not None
 
 
+def has_sync_support() -> bool:
+    return importlib.util.find_spec("harness_kit.sync_project") is not None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="harness-kit")
     sub = parser.add_subparsers(dest="command")
@@ -14,6 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
         init_parser = sub.add_parser("init")
         init_parser.add_argument("--target", required=True)
         init_parser.add_argument("--project-name", required=True)
+    if has_sync_support():
+        sync_parser = sub.add_parser("sync-project")
+        sync_parser.add_argument("--target", required=True)
     claim_parser = sub.add_parser("claim-task")
     claim_parser.add_argument("--repo-root", required=True)
     claim_parser.add_argument("--task", required=True)
@@ -37,6 +44,25 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
     )
+
+    finish_parser = sub.add_parser("finish-worktree")
+    finish_parser.add_argument("--repo-root", required=True)
+    finish_parser.add_argument("--task-id", required=True)
+    finish_parser.add_argument("--target-branch", required=True)
+    finish_parser.add_argument("--strategy", choices=["squash", "merge"], default="squash")
+    finish_parser.add_argument("--push", action="store_true")
+    finish_parser.add_argument("--cleanup", choices=["preserve", "remove"])
+    finish_parser.add_argument("--promote-review-pack")
+    finish_parser.add_argument("--commit-title")
+
+    publish_parser = sub.add_parser("publish-pr")
+    publish_parser.add_argument("--repo-root", required=True)
+    publish_parser.add_argument("--task-id", required=True)
+    publish_parser.add_argument("--target-branch", required=True)
+    publish_parser.add_argument("--title")
+    publish_parser.add_argument("--body-from-review-pack")
+    publish_parser.add_argument("--draft", action="store_true")
+    publish_parser.add_argument("--update-if-exists", action="store_true")
 
     refresh_parser = sub.add_parser("refresh-memory")
     refresh_parser.add_argument("--repo-root", required=True)
@@ -110,6 +136,11 @@ def main() -> int:
         from harness_kit.scaffold import init_project
 
         init_project(Path(args.target), args.project_name)
+    elif args.command == "sync-project":
+        from harness_kit.scaffold import distribution_root
+        from harness_kit.sync_project import sync_project
+
+        print(sync_project(source_root=distribution_root(), target_root=Path(args.target)))
     elif args.command == "claim-task":
         from harness_kit.queue import claim_task
 
@@ -145,6 +176,36 @@ def main() -> int:
         if moved_task is not None:
             print(moved_task)
         print(record)
+    elif args.command == "finish-worktree":
+        from harness_kit.finish_worktree import finish_worktree
+
+        result = finish_worktree(
+            repo_root=repo_root,
+            task_id=args.task_id,
+            target_branch=args.target_branch,
+            strategy=args.strategy,
+            push=args.push,
+            cleanup=args.cleanup,
+            promote_review_pack=Path(args.promote_review_pack) if args.promote_review_pack else None,
+            commit_title=args.commit_title,
+        )
+        print(result.queue_path)
+        print(result.registry_path)
+        print(result.merged_commit)
+    elif args.command == "publish-pr":
+        from harness_kit.publish_pr import publish_pr
+
+        result = publish_pr(
+            repo_root=repo_root,
+            task_id=args.task_id,
+            target_branch=args.target_branch,
+            title=args.title,
+            body_from_review_pack=Path(args.body_from_review_pack) if args.body_from_review_pack else None,
+            draft=args.draft,
+            update_if_exists=args.update_if_exists,
+        )
+        print(result.registry_path)
+        print(result.pr_url)
     elif args.command == "refresh-memory":
         from harness_kit.memory import refresh_memory
 

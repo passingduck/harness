@@ -64,6 +64,8 @@ class CliSmokeTest(unittest.TestCase):
             "claim-task",
             "open-worktree",
             "close-worktree",
+            "finish-worktree",
+            "publish-pr",
             "refresh-memory",
             "write-review-result",
             "build-review-pack",
@@ -92,6 +94,9 @@ class TemplatePresenceTest(unittest.TestCase):
             "templates/project/.harness/templates/pr-pack.md",
             "templates/project/scripts/harness/run-qa.sh",
             "templates/project/scripts/harness/write-review-result.sh",
+            "templates/project/scripts/harness/finish-worktree.sh",
+            "templates/project/scripts/harness/publish-pr.sh",
+            "skills/merge-worktree/SKILL.md",
             "skills/orchestrate-queue/SKILL.md",
             "skills/refresh-memory/SKILL.md",
             "skills/prepare-review-pack/SKILL.md",
@@ -109,6 +114,9 @@ class TemplatePresenceTest(unittest.TestCase):
             "## QA Gate",
             "## Worktree Rule",
             "## Output Convention",
+            "review-result receipts",
+            "`finish-worktree`",
+            "`publish-pr`",
         ]:
             self.assertIn(token, agents_text)
         for field in [
@@ -125,7 +133,7 @@ class TemplatePresenceTest(unittest.TestCase):
         gitignore_text = Path("templates/project/.gitignore").read_text(
             encoding="utf-8"
         )
-        for token in [".harness/runtime/", ".worktrees/", ".superpowers/"]:
+        for token in [".harness/runtime", ".harness/runtime/", ".worktrees/", ".superpowers/"]:
             self.assertIn(token, gitignore_text)
 
         model_routing_text = Path(
@@ -250,8 +258,48 @@ class TemplatePresenceTest(unittest.TestCase):
             "## Verification Evidence",
             "## Documentation Updates",
             "## Deferred Questions",
+            "task-linked",
         ]:
             self.assertIn(token, pr_pack_text)
+
+        readme_text = Path("templates/project/README.md").read_text(encoding="utf-8")
+        for token in [
+            "`scripts/harness/write-review-result.sh`",
+            "`scripts/harness/finish-worktree.sh`",
+            "`scripts/harness/publish-pr.sh`",
+            "`third_party/harness-source.txt`",
+        ]:
+            self.assertIn(token, readme_text)
+
+        summary_text = Path("templates/project/SUMMARY.md").read_text(encoding="utf-8")
+        for token in [
+            "`write-review-result`",
+            "`finish-worktree`",
+            "`publish-pr`",
+            "`third_party/harness-source.txt`",
+        ]:
+            self.assertIn(token, summary_text)
+
+        requirement_text = Path("templates/project/REQUIREMENT.md").read_text(
+            encoding="utf-8"
+        )
+        for token in [
+            "`gh`",
+            "`third_party/harness-source.txt`",
+            "vendored runtime files",
+        ]:
+            self.assertIn(token, requirement_text)
+
+        merge_worktree_text = Path("skills/merge-worktree/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in [
+            "name: merge-worktree",
+            "review-result",
+            "`publish-pr`",
+            "`finish-worktree`",
+        ]:
+            self.assertIn(token, merge_worktree_text)
 
         evidence_pack_text = Path(
             "templates/project/.harness/templates/evidence-pack.md"
@@ -384,6 +432,9 @@ class InitScaffoldTest(unittest.TestCase):
                 (target / ".harness" / "runtime" / "worktree-registry").is_dir()
             )
             self.assertTrue((target / ".worktrees").is_dir())
+            provenance = target / "third_party" / "harness-source.txt"
+            self.assertTrue(provenance.is_file())
+            self.assertIn("source_commit:", provenance.read_text(encoding="utf-8"))
             self.assertTrue(
                 (target / ".harness" / "templates" / "directory.md").is_file()
             )
@@ -395,6 +446,16 @@ class InitScaffoldTest(unittest.TestCase):
             )
             self.assertTrue(write_review_result_path.is_file())
             self.assertTrue(os.access(write_review_result_path, os.X_OK))
+            finish_worktree_path = (
+                target / "scripts" / "harness" / "finish-worktree.sh"
+            )
+            self.assertTrue(finish_worktree_path.is_file())
+            self.assertTrue(os.access(finish_worktree_path, os.X_OK))
+            publish_pr_path = (
+                target / "scripts" / "harness" / "publish-pr.sh"
+            )
+            self.assertTrue(publish_pr_path.is_file())
+            self.assertTrue(os.access(publish_pr_path, os.X_OK))
             self.assertTrue(
                 (
                     target
@@ -403,6 +464,26 @@ class InitScaffoldTest(unittest.TestCase):
                     / "runtime"
                     / "harness_kit"
                     / "cli.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / "scripts"
+                    / "harness"
+                    / "runtime"
+                    / "harness_kit"
+                    / "finish_worktree.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / "scripts"
+                    / "harness"
+                    / "runtime"
+                    / "harness_kit"
+                    / "publish_pr.py"
                 ).is_file()
             )
             self.assertTrue(
@@ -434,6 +515,8 @@ class InitScaffoldTest(unittest.TestCase):
                 "claim-task",
                 "open-worktree",
                 "close-worktree",
+                "finish-worktree",
+                "publish-pr",
                 "refresh-memory",
                 "write-review-result",
                 "build-review-pack",
@@ -466,10 +549,25 @@ class InitScaffoldTest(unittest.TestCase):
                 target / ".harness" / "policies" / "model-routing.yaml",
                 target / ".harness" / "templates" / "directory.md",
                 target / ".harness" / "templates" / "evidence-pack.md",
+                target / "third_party" / "harness-source.txt",
                 target / "scripts" / "harness" / "open-worktree.sh",
+                target / "scripts" / "harness" / "finish-worktree.sh",
+                target / "scripts" / "harness" / "publish-pr.sh",
                 target / "scripts" / "harness" / "run-qa.sh",
                 target / "scripts" / "harness" / "write-review-result.sh",
                 target / "scripts" / "harness" / "runtime" / "harness_kit" / "cli.py",
+                target
+                / "scripts"
+                / "harness"
+                / "runtime"
+                / "harness_kit"
+                / "finish_worktree.py",
+                target
+                / "scripts"
+                / "harness"
+                / "runtime"
+                / "harness_kit"
+                / "publish_pr.py",
                 target
                 / "scripts"
                 / "harness"
@@ -485,6 +583,42 @@ class InitScaffoldTest(unittest.TestCase):
                     self.assertTrue(path.is_file(), path)
                 else:
                     self.assertTrue(path.is_dir(), path)
+
+            subprocess.run(
+                ["git", "init"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Harness Tests"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "harness-tests@example.com"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "init scaffold repo"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
             task_path = target / ".harness" / "runtime" / "queue" / "ready" / "task-1.md"
             task_path.parent.mkdir(parents=True, exist_ok=True)
@@ -515,8 +649,27 @@ class InitScaffoldTest(unittest.TestCase):
             self.assertEqual(claim_proc.returncode, 0, claim_proc.stderr)
             context_packs_dir = target / ".harness" / "runtime" / "context-packs"
             context_pack = context_packs_dir / "task-1.md"
+            runtime_pycache = (
+                target / "scripts" / "harness" / "runtime" / "harness_kit" / "__pycache__"
+            )
             self.assertTrue(context_packs_dir.is_dir())
             self.assertTrue(context_pack.is_file())
+            self.assertFalse(runtime_pycache.exists())
+            for rel_path in [
+                "scripts/harness/build-review-pack.sh",
+                "scripts/harness/claim-task.sh",
+                "scripts/harness/close-worktree.sh",
+                "scripts/harness/finish-worktree.sh",
+                "scripts/harness/open-worktree.sh",
+                "scripts/harness/publish-pr.sh",
+                "scripts/harness/refresh-memory.sh",
+                "scripts/harness/write-review-result.sh",
+            ]:
+                self.assertIn(
+                    "PYTHONDONTWRITEBYTECODE=1",
+                    (target / rel_path).read_text(encoding="utf-8"),
+                    rel_path,
+                )
 
             open_proc = subprocess.run(
                 [
@@ -540,6 +693,23 @@ class InitScaffoldTest(unittest.TestCase):
                 target / ".harness" / "runtime" / "worktree-registry" / "task-1.md"
             )
             self.assertTrue(registry_record.is_file())
+            worktree_ignore_proc = subprocess.run(
+                ["git", "check-ignore", "-q", ".harness/runtime"],
+                cwd=target / ".worktrees" / "task-1",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(worktree_ignore_proc.returncode, 0)
+            worktree_status_proc = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=target / ".worktrees" / "task-1",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(worktree_status_proc.returncode, 0, worktree_status_proc.stderr)
+            self.assertEqual(worktree_status_proc.stdout.strip(), "")
 
             close_proc = subprocess.run(
                 [
@@ -641,6 +811,19 @@ class InitScaffoldTest(unittest.TestCase):
                     / "task-1"
                     / "spec_scope_review.md"
                 ).is_file()
+            )
+            self.assertFalse(runtime_pycache.exists())
+
+    def test_source_install_wrappers_disable_python_bytecode(self) -> None:
+        repo_root = Path(__file__).resolve().parent.parent
+        for rel_path in [
+            "install/init-project.sh",
+            "install/sync-project.sh",
+        ]:
+            self.assertIn(
+                "PYTHONDONTWRITEBYTECODE=1",
+                (repo_root / rel_path).read_text(encoding="utf-8"),
+                rel_path,
             )
 
     def test_init_refuses_non_empty_target_directory(self) -> None:

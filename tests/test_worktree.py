@@ -4,7 +4,12 @@ import subprocess
 import unittest
 
 from harness_kit.queue import claim_task, move_task
-from harness_kit.worktree import choose_worktree_path, close_worktree, open_worktree
+from harness_kit.worktree import (
+    choose_worktree_path,
+    close_worktree,
+    open_worktree,
+    record_review_pack_path,
+)
 
 
 TASK_TEXT = """---
@@ -157,6 +162,85 @@ class WorktreePathTest(unittest.TestCase):
 
             self.assertTrue(record.is_file())
             self.assertTrue((repo / ".worktrees" / "task-1").is_dir())
+
+    def test_open_worktree_links_runtime_back_to_control_root_for_git_worktrees(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            (repo / ".gitignore").write_text("/.worktrees/\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", ".gitignore"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "ignore worktrees"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            runtime_link = repo / ".worktrees" / "task-1" / ".harness" / "runtime"
+            self.assertTrue(runtime_link.is_symlink())
+            self.assertEqual(
+                runtime_link.resolve(),
+                (repo / ".harness" / "runtime").resolve(),
+            )
+
+    def test_open_worktree_repairs_existing_attached_worktree_runtime_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._init_git_repo(repo)
+            (repo / ".gitignore").write_text("/.worktrees/\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", ".gitignore"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "ignore worktrees"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            runtime_link = repo / ".worktrees" / "task-1" / ".harness" / "runtime"
+            runtime_link.unlink()
+            runtime_link.mkdir(parents=True, exist_ok=True)
+            (runtime_link / "stale.txt").write_text("stale\n", encoding="utf-8")
+
+            open_worktree(
+                repo_root=repo,
+                task_id="task-1",
+                branch_name="task-1",
+                cleanup_policy="preserve",
+            )
+
+            self.assertTrue(runtime_link.is_symlink())
+            self.assertEqual(
+                runtime_link.resolve(),
+                (repo / ".harness" / "runtime").resolve(),
+            )
 
     def test_open_worktree_fails_when_gitignore_lacks_worktrees_rule(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -371,3 +455,34 @@ class WorktreePathTest(unittest.TestCase):
             self.assertTrue(review_task.is_file())
             self.assertEqual(review_task.parent.name, "review")
             self.assertEqual(record.read_text(encoding="utf-8"), before)
+
+    def test_record_review_pack_path_preserves_existing_finish_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = self._write_registry_record(root, "task-1", root / ".worktrees" / "task-1")
+            record.write_text(
+                record.read_text(encoding="utf-8").replace(
+                    "---\n",
+                    "---\n"
+                    "target_branch: main\n"
+                    "merge_strategy: squash\n"
+                    "merge_status: merged_local\n",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            record_review_pack_path(
+                root,
+                "task-1",
+                draft_path=Path(".harness/runtime/review-packs/drafts/task-1-pr.md"),
+            )
+
+            text = record.read_text(encoding="utf-8")
+            self.assertIn("target_branch: main", text)
+            self.assertIn("merge_strategy: squash", text)
+            self.assertIn("merge_status: merged_local", text)
+            self.assertIn(
+                "draft_pr_review_pack: .harness/runtime/review-packs/drafts/task-1-pr.md",
+                text,
+            )

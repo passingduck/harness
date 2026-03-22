@@ -1,3 +1,4 @@
+import os
 import re
 from pathlib import Path
 
@@ -14,11 +15,11 @@ PACK_TEMPLATE_BY_TYPE = {
 
 
 def _resolve_repo_relative_path(repo_root: Path, rel_path: Path) -> Path:
-    repo_root = repo_root.resolve()
+    repo_root = Path(os.path.abspath(repo_root))
     if rel_path.is_absolute():
-        resolved = rel_path.resolve()
+        resolved = Path(os.path.abspath(rel_path))
     else:
-        resolved = (repo_root / rel_path).resolve()
+        resolved = Path(os.path.abspath(repo_root / rel_path))
     resolved.relative_to(repo_root)
     return resolved
 
